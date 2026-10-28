@@ -1,82 +1,94 @@
+"""
+Candidate scoring and filtering engine.
+
+Scores each candidate against the client brief using weighted criteria:
+- Follower range fit
+- Engagement rate
+- Content keyword overlap
+- Audience region match
+- Price vs. budget
+
+All score components are normalized to a 1-5 scale; the total is a weighted sum.
+"""
+
+from typing import Any, Optional, Tuple
+
 import pandas as pd
 
 
-# 默认筛选维度与权重
+# Default criteria and weights (must sum to 1.0)
 DEFAULT_CRITERIA = [
-    {"criterion": "粉丝数匹配", "weight": 0.20, "how_to_check": "粉丝数落在目标区间"},
-    {"criterion": "互动率", "weight": 0.25, "how_to_check": "互动率高于行业中位数"},
-    {"criterion": "内容调性匹配", "weight": 0.25, "how_to_check": "内容关键词与品牌调性一致"},
-    {"criterion": "受众地区匹配", "weight": 0.15, "how_to_check": "受众主要位于目标市场"},
-    {"criterion": "报价在预算内", "weight": 0.15, "how_to_check": "预估报价不超过预算上限"},
+    {"criterion": "Follower Fit",     "weight": 0.20, "how_to_check": "Followers fall within target range"},
+    {"criterion": "Engagement Rate",  "weight": 0.25, "how_to_check": "Engagement is above industry median"},
+    {"criterion": "Content Fit",      "weight": 0.25, "how_to_check": "Content keywords match brand tone"},
+    {"criterion": "Audience Region",  "weight": 0.15, "how_to_check": "Audience is mainly in target market"},
+    {"criterion": "Price vs. Budget", "weight": 0.15, "how_to_check": "Estimated price does not exceed budget"},
 ]
 
 
-def score_candidates(candidates: list[dict], brief: dict) -> pd.DataFrame:
-    """
-    candidates: 每个 dict 至少包含 name, followers, engagement_rate,
-                content_keywords(list), audience_region, estimated_price
-    brief: 客户填写的需求
-    """
-    rows = []
-    for c in candidates:
-        scores = {}
-        reasons = []
-
-        # 1. 粉丝数匹配
-        follower_score = _score_followers(c.get("followers", 0), brief.get("follower_range"))
-        scores["粉丝数匹配"] = follower_score
-        reasons.append(f"粉丝数 {_fmt_num(c.get('followers', 0))} -> {'匹配' if follower_score >= 3 else '偏差'}")
-
-        # 2. 互动率
-        eng = c.get("engagement_rate", 0)
-        eng_score = _score_engagement(eng)
-        scores["互动率"] = eng_score
-        reasons.append(f"互动率 {eng:.2%} -> {'良好' if eng_score >= 3 else '偏低'}")
-
-        # 3. 内容调性（关键词重合）
-        target_kw = set(brief.get("keywords", []))
-        content_kw = set(c.get("content_keywords", []))
-        overlap = len(target_kw & content_kw) / max(len(target_kw), 1)
-        kw_score = min(5, max(1, round(overlap * 5)))
-        scores["内容调性匹配"] = kw_score
-        reasons.append(f"关键词重合 {overlap:.0%}")
-
-        # 4. 受众地区
-        region_score = 5 if c.get("audience_region") == brief.get("target_market") else 2
-        scores["受众地区匹配"] = region_score
-
-        # 5. 报价
-        price = c.get("estimated_price", 0)
-        budget = brief.get("budget_max", 0)
-        if budget and price:
-            price_score = 5 if price <= budget else (3 if price <= budget * 1.2 else 1)
-        else:
-            price_score = 3  # 未知
-        scores["报价在预算内"] = price_score
-
-        # 加权总分
-        total = sum(
-            scores[item["criterion"]] * item["weight"]
-            for item in DEFAULT_CRITERIA
-        )
-
-        rows.append({
-            "name": c.get("name", ""),
-            "platform": c.get("platform", ""),
-            "followers": c.get("followers", 0),
-            "engagement_rate": c.get("engagement_rate", 0),
-            "estimated_price": c.get("estimated_price", 0),
-            **scores,
-            "total_score": round(total, 2),
-            "notes": "; ".join(reasons),
-        })
-
-    df = pd.DataFrame(rows).sort_values("total_score", ascending=False).reset_index(drop=True)
-    return df
+# ---------- Safe type conversion helpers ----------
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    """Convert a value to float; return default on failure."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
-def _score_followers(n: int, target_range: tuple | None) -> int:
-    if not target_range:
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Convert a value to int; return default on failure."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
+
+
+def _normalize_keywords(value: Any) -> set:
+    """Normalize keyword input into a lowercase set of non-empty strings."""
+    if value is None:
+        return set()
+    if isinstance(value, str):
+        items = value.split(",")
+    elif isinstance(value, (list, tuple, set)):
+        items = value
+    else:
+        return set()
+    return {str(k).strip().lower() for k in items if str(k).strip()}
+
+
+def _normalize_region(value: Any) -> str:
+    """Normalize region string for comparison."""
+    if value is None:
+        return ""
+    return str(value).strip().lower()
+
+
+def _normalize_follower_range(value: Any) -> Optional[Tuple[int, int]]:
+    """Normalize follower range to a (low, high) tuple, or None."""
+    if value is None:
+        return None
+    try:
+        if isinstance(value, (list, tuple)) and len(value) >= 2:
+            low, high = int(value[0]), int(value[1])
+            if low > high:
+                low, high = high, low
+            return (low, high)
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+# ---------- Individual scoring functions ----------
+def _score_followers(n: int, target_range: Optional[Tuple[int, int]]) -> int:
+    """Score follower count fit against target range (1-5)."""
+    if target_range is None:
         return 3
     low, high = target_range
     if low <= n <= high:
@@ -87,6 +99,7 @@ def _score_followers(n: int, target_range: tuple | None) -> int:
 
 
 def _score_engagement(rate: float) -> int:
+    """Score engagement rate (1-5)."""
     if rate >= 0.05:
         return 5
     if rate >= 0.02:
@@ -96,9 +109,125 @@ def _score_engagement(rate: float) -> int:
     return 2
 
 
+def _score_keywords(target_kw: set, content_kw: set) -> Tuple[int, float]:
+    """Score keyword overlap (1-5) and return (score, overlap_ratio)."""
+    if not target_kw:
+        return 3, 0.0
+    overlap = len(target_kw & content_kw) / len(target_kw)
+    score = min(5, max(1, round(overlap * 5)))
+    return score, overlap
+
+
+def _score_region(candidate_region: str, target_market: str) -> int:
+    """Score audience region match (1-5)."""
+    if not candidate_region or not target_market:
+        return 3
+    if candidate_region == target_market:
+        return 5
+    if candidate_region in target_market or target_market in candidate_region:
+        return 3
+    return 2
+
+
+def _score_price(price: float, budget_max: float) -> int:
+    """Score price vs. budget (1-5)."""
+    if budget_max <= 0 or price <= 0:
+        return 3
+    if price <= budget_max:
+        return 5
+    if price <= budget_max * 1.2:
+        return 3
+    return 1
+
+
 def _fmt_num(n: int) -> str:
+    """Format numbers for display (1.2K, 3.4M)."""
     if n >= 1_000_000:
-        return f"{n/1_000_000:.1f}M"
+        return f"{n / 1_000_000:.1f}M"
     if n >= 1_000:
-        return f"{n/1_000:.1f}K"
+        return f"{n / 1_000:.1f}K"
     return str(n)
+
+
+# ---------- Main entry ----------
+def score_candidates(candidates: list, brief: dict) -> pd.DataFrame:
+    """
+    Score candidates against the client brief.
+
+    Each candidate dict should have at least:
+        name, platform, followers, engagement_rate,
+        content_keywords (list or comma-separated string),
+        audience_region, estimated_price
+
+    Returns a DataFrame sorted by total_score descending.
+    """
+    if not candidates:
+        return pd.DataFrame()
+
+    target_kw = _normalize_keywords(brief.get("keywords"))
+    target_market = _normalize_region(brief.get("target_market"))
+    follower_range = _normalize_follower_range(brief.get("follower_range"))
+    budget_max = _safe_float(brief.get("budget_max"), 0.0)
+
+    rows = []
+    for c in candidates:
+        if not isinstance(c, dict):
+            continue
+
+        name = str(c.get("name") or "").strip()
+        platform = str(c.get("platform") or "").strip()
+        followers = _safe_int(c.get("followers"), 0)
+        engagement = _safe_float(c.get("engagement_rate"), 0.0)
+        price = _safe_float(c.get("estimated_price"), 0.0)
+        content_kw = _normalize_keywords(c.get("content_keywords"))
+        region = _normalize_region(c.get("audience_region"))
+
+        # Score each criterion
+        follower_score = _score_followers(followers, follower_range)
+        engagement_score = _score_engagement(engagement)
+        kw_score, kw_overlap = _score_keywords(target_kw, content_kw)
+        region_score = _score_region(region, target_market)
+        price_score = _score_price(price, budget_max)
+
+        scores = {
+            "Follower Fit":     follower_score,
+            "Engagement Rate":  engagement_score,
+            "Content Fit":      kw_score,
+            "Audience Region":  region_score,
+            "Price vs. Budget": price_score,
+        }
+
+        # Weighted total
+        total = sum(
+            scores[item["criterion"]] * item["weight"]
+            for item in DEFAULT_CRITERIA
+        )
+
+        # Human-readable notes
+        notes = [
+            f"Followers {_fmt_num(followers)} -> {'in range' if follower_score >= 3 else 'off target'}",
+            f"Engagement {engagement:.2%} -> {'healthy' if engagement_score >= 3 else 'low'}",
+            f"Keyword overlap {kw_overlap:.0%}",
+        ]
+        if region and target_market:
+            notes.append(f"Region {'match' if region_score == 5 else 'mismatch'}")
+
+        rows.append({
+            "name": name,
+            "platform": platform,
+            "followers": followers,
+            "engagement_rate": round(engagement, 4),
+            "estimated_price": price,
+            **scores,
+            "total_score": round(total, 2),
+            "notes": "; ".join(notes),
+        })
+
+    if not rows:
+        return pd.DataFrame()
+
+    return (
+        pd.DataFrame(rows)
+        .sort_values("total_score", ascending=False)
+        .reset_index(drop=True)
+    )
