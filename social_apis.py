@@ -1,42 +1,61 @@
+"""
+Social platform API clients.
+
+- YouTubeClient: uses a simple API key, safe to deploy on Streamlit Cloud.
+- InstagramClient: requires a valid Graph API access token for an authorized business/creator account.
+- TikTokClient: requires a valid Display API access token for the currently authorized user.
+
+Note: Instagram and TikTok clients do NOT use instagrapi or tiktokapi.
+They only use `requests`, so they will not break deployment.
+"""
+
+import requests
 from googleapiclient.discovery import build
 
 
 class YouTubeClient:
     def __init__(self, api_key: str):
+        if not api_key:
+            raise ValueError("YouTube API key is required.")
         self.youtube = build("youtube", "v3", developerKey=api_key)
 
     def get_channel_by_handle(self, handle: str):
-        """handle: @username 或 channel ID"""
+        """Look up a channel by @handle or channel ID."""
+        if not handle:
+            return None
+
         resp = self.youtube.search().list(
             part="snippet",
-            q=handle,
+            q=handle.strip(),
             type="channel",
             maxResults=1,
         ).execute()
 
-        if not resp.get("items"):
+        items = resp.get("items", [])
+        if not items:
             return None
 
-        channel_id = resp["items"][0]["snippet"]["channelId"]
+        channel_id = items[0]["snippet"]["channelId"]
 
         stats = self.youtube.channels().list(
             part="statistics,snippet",
             id=channel_id,
         ).execute()
 
-        if not stats.get("items"):
+        stats_items = stats.get("items", [])
+        if not stats_items:
             return None
 
-        item = stats["items"][0]
-        sn = item["snippet"]
-        st = item["statistics"]
+        item = stats_items[0]
+        sn = item.get("snippet", {})
+        st = item.get("statistics", {})
 
         subs = int(st.get("subscriberCount", 0))
         views = int(st.get("viewCount", 0))
         videos = int(st.get("videoCount", 0))
 
-        # 近似互动率：总观看 / (订阅 × 视频数) —— 仅作参考
-        engagement = (views / (subs * videos)) if subs and videos else 0
+        # Approximate engagement: total views / (subscribers * videos)
+        engagement = (views / (subs * videos)) if subs and videos else 0.0
 
         return {
             "platform": "youtube",
@@ -49,7 +68,6 @@ class YouTubeClient:
             "engagement_rate": round(engagement, 4),
             "country": sn.get("country", ""),
         }
-      import requests
 
 
 class InstagramClient:
@@ -59,8 +77,8 @@ class InstagramClient:
 
     def get_profile(self, ig_user_id: str):
         """
-        仅能获取已授权商业/创作者账号的公开信息。
-        ig_user_id 来自 Instagram 商业账号 ID。
+        Only works for authorized business/creator accounts.
+        ig_user_id comes from the Instagram Business Account ID.
         """
         url = f"{self.base}/{ig_user_id}"
         params = {
@@ -69,20 +87,17 @@ class InstagramClient:
         }
         resp = requests.get(url, params=params, timeout=10)
         data = resp.json()
-        if "error" in data:
-            return {"platform": "instagram", "error": data["error"]["message"]}
 
-        followers = data.get("followers_count", 0)
-        media = data.get("media_count", 1)
+        if "error" in data:
+            return {"platform": "instagram", "error": data["error"].get("message", "Unknown error")}
 
         return {
             "platform": "instagram",
             "username": data.get("username", ""),
-            "followers": followers,
-            "media_count": media,
+            "followers": data.get("followers_count", 0),
+            "media_count": data.get("media_count", 0),
             "biography": data.get("biography", ""),
         }
-import requests
 
 
 class TikTokClient:
@@ -92,8 +107,8 @@ class TikTokClient:
 
     def get_user_info(self):
         """
-        仅能获取当前授权用户的公开信息（Display API 限制）。
-        无法用它搜索任意用户。
+        Only works for the currently authorized user.
+        Display API cannot search arbitrary users.
         """
         url = f"{self.base}/user/info/"
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -102,8 +117,10 @@ class TikTokClient:
         }
         resp = requests.get(url, headers=headers, params=params, timeout=10)
         data = resp.json()
-        if "error" in data and data["error"].get("code") != "ok":
-            return {"platform": "tiktok", "error": data["error"]}
+
+        error = data.get("error", {})
+        if error and error.get("code") not in (None, "", "ok"):
+            return {"platform": "tiktok", "error": error}
 
         user = data.get("data", {}).get("user", {})
         return {
