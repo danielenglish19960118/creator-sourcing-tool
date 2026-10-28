@@ -6,29 +6,34 @@ import pandas as pd
 import streamlit as st
 
 from scraper import ComplianceScraper
-from social_apis import YouTubeClient, InstagramClient, TikTokClient
 from scoring import score_candidates, DEFAULT_CRITERIA
 from draft_generator import generate_outreach_drafts
 
+# Only import YouTubeClient; Instagram/TikTok are not used in this UI.
+try:
+    from social_apis import YouTubeClient
+except ImportError:
+    YouTubeClient = None
 
-# ========== 页面设置 ==========
+
+# ========== Page config ==========
 st.set_page_config(
-    page_title="创作者筛选与联系草稿工具",
+    page_title="Creator Sourcing & Outreach Draft Tool",
     page_icon="🎯",
     layout="wide",
 )
 
-st.title("🎯 创作者筛选与联系草稿工具")
+st.title("🎯 Creator Sourcing & Outreach Draft Tool")
 st.caption(
-    "合规版：只抓取公开网页、遵守 robots.txt、不自动私讯、不群发。"
-    "所有输出请人工审核后使用。"
+    "Compliance-first: only public pages, respects robots.txt, no auto-DM, no bulk messaging. "
+    "All outputs must be reviewed manually before use."
 )
 
 
-# ========== 侧边栏：API Keys ==========
+# ========== Sidebar: API keys ==========
 with st.sidebar:
-    st.header("🔑 API 设置（可选）")
-    st.caption("YouTube API Key 用于自动抓取频道数据；不填则只能手动输入。")
+    st.header("🔑 API Settings (Optional)")
+    st.caption("YouTube API Key is used to fetch public channel data. Leave blank to enter data manually.")
 
     youtube_key = st.text_input(
         "YouTube Data API Key",
@@ -38,79 +43,83 @@ with st.sidebar:
 
     st.divider()
     st.markdown(
-        "**合规提醒**\n"
-        "- Instagram / TikTok 官方 API 限制严格，仅能获取已授权商业账号。\n"
-        "- 本工具不自动发送任何消息。\n"
-        "- 请勿用本工具抓取私密或登录后页面。"
+        "**Compliance Notes**\n"
+        "- Instagram / TikTok official APIs are strict and only cover authorized business accounts.\n"
+        "- This tool does NOT send any messages automatically.\n"
+        "- Do NOT use this tool to scrape private or logged-in pages."
     )
 
 
-# ========== 1. 填写 Brief ==========
-st.header("1. 填写合作需求")
+# ========== 1. Brief ==========
+st.header("1. Campaign Brief")
 
 col1, col2 = st.columns(2)
 
 with col1:
     product = st.text_input(
-        "产品 / 服务名称",
-        placeholder="例如：台湾地区製保养品",
+        "Product / Service",
+        placeholder="e.g., Taiwanese skincare brand",
     )
     target_market = st.text_input(
-        "目标市场",
-        placeholder="例如：东南亚华语市场、北美",
+        "Target Market",
+        placeholder="e.g., Southeast Asia (Chinese-speaking), North America",
     )
     goal = st.text_area(
-        "合作目标",
-        placeholder="例如：提升品牌知名度、导购、取得 UGC 内容",
+        "Campaign Goal",
+        placeholder="e.g., brand awareness, conversions, UGC content",
     )
 
 with col2:
     budget_min = st.number_input(
-        "预算下限（新台币）", min_value=0, step=1000, value=5000
+        "Budget Min (TWD)", min_value=0, step=1000, value=5000
     )
     budget_max = st.number_input(
-        "预算上限（新台币）", min_value=0, step=1000, value=15000
+        "Budget Max (TWD)", min_value=0, step=1000, value=15000
     )
     follower_range = st.slider(
-        "目标粉丝数区间",
+        "Target Follower Range",
         min_value=1000,
         max_value=1_000_000,
         value=(5000, 100_000),
         step=1000,
     )
     keywords_text = st.text_input(
-        "内容关键词（逗号分隔）",
-        placeholder="例如：保养, 护肤, 敏感肌",
+        "Content Keywords (comma-separated)",
+        placeholder="e.g., skincare, beauty, sensitive skin",
     )
 
 
-# ========== 2. 候选人输入 ==========
-st.header("2. 候选人数据")
+# ========== 2. Candidate input ==========
+st.header("2. Candidate Data")
 
 input_mode = st.radio(
-    "选择输入方式",
-    ["手动粘贴公开 URL（合规爬取）", "直接粘贴候选人信息"],
+    "Select input method",
+    ["Paste public URLs (compliant scraping)", "Enter candidate info manually"],
     horizontal=True,
 )
 
-candidates = []
+# Persist candidates across reruns
+if "candidates" not in st.session_state:
+    st.session_state["candidates"] = []
+candidates = st.session_state["candidates"]
 
-# ---------- 模式 A：公开 URL 爬取 ----------
-if input_mode == "手动粘贴公开 URL（合规爬取）":
+# ---------- Mode A: public URL scraping ----------
+if input_mode == "Paste public URLs (compliant scraping)":
     st.info(
-        "只支持**公开可访问、robots.txt 允许抓取**的创作者页面（如个人博客、公开的创作者介绍页）。"
-        "**不要**粘贴 Instagram / TikTok / YouTube 的登录后页面或需要绕过验证的 URL。"
+        "Only **public, accessible pages that allow crawling via robots.txt** are supported "
+        "(e.g., personal blogs, public creator pages). "
+        "**Do NOT** paste Instagram / TikTok / YouTube logged-in pages or URLs that require bypassing verification."
     )
 
     urls_text = st.text_area(
-        "每行一个公开 URL",
+        "One public URL per line",
         placeholder="https://example-creator.com/about\nhttps://another-creator.com",
         height=120,
     )
 
-    if st.button("爬取公开页面元数据", type="primary"):
+    if st.button("Scrape public page metadata", type="primary"):
         if not urls_text.strip():
-            st.warning("请至少输入一个 URL")
+            st.warning("Please enter at least one URL.")
         else:
             scraper = ComplianceScraper()
             urls = [u.strip() for u in urls_text.splitlines() if u.strip()]
@@ -123,23 +132,21 @@ if input_mode == "手动粘贴公开 URL（合规爬取）":
                 progress.progress((i + 1) / len(urls))
 
             st.session_state["scraped_results"] = results
-            st.success(f"完成 {len(results)} 个页面的抓取")
+            st.success(f"Finished scraping {len(results)} page(s).")
 
-    # 展示爬取结果
     if "scraped_results" in st.session_state:
         for r in st.session_state["scraped_results"]:
             if "error" in r:
-                st.error(f"❌ {r['url']}：{r['error']}")
+                st.error(f"❌ {r['url']}: {r['error']}")
             else:
                 with st.expander(f"✅ {r['url']}"):
-                    st.write(f"**标题**：{r.get('page_title', '')}")
-                    st.write(f"**OG 标题**：{r.get('og_title', '')}")
-                    st.write(f"**Meta Description**：{r.get('meta_description', '')}")
-                    st.write(f"**OG Description**：{r.get('og_description', '')}")
-                    st.write(f"**内容摘要**：{r.get('body_excerpt', '')[:300]}...")
+                    st.write(f"**Title**: {r.get('page_title', '')}")
+                    st.write(f"**OG Title**: {r.get('og_title', '')}")
+                    st.write(f"**Meta Description**: {r.get('meta_description', '')}")
+                    st.write(f"**OG Description**: {r.get('og_description', '')}")
+                    st.write(f"**Body Excerpt**: {r.get('body_excerpt', '')[:300]}...")
 
-                    # 用爬取结果填充候选人
-                    if st.button("加入候选人", key=f"add_{r['url']}"):
+                    if st.button("Add as candidate", key=f"add_{hash(r['url'])}"):
                         candidates.append({
                             "name": r.get("og_title") or r.get("page_title", r["url"]),
                             "platform": "website",
@@ -151,28 +158,29 @@ if input_mode == "手动粘贴公开 URL（合规爬取）":
                             "content_keywords": [],
                             "source_url": r["url"],
                         })
+                        st.success("Candidate added.")
 
-# ---------- 模式 B：直接粘贴信息 ----------
+# ---------- Mode B: manual input ----------
 else:
-    st.info("手动输入候选人的公开数据（粉丝数、互动率等）。这些数据可以来自平台公开页面。")
+    st.info("Manually enter publicly visible candidate data (followers, engagement, etc.).")
 
     with st.form("manual_candidate_form"):
-        c_name = st.text_input("候选人名称")
-        c_platform = st.selectbox("平台", ["Instagram", "TikTok", "YouTube", "博客", "其他"])
-        c_followers = st.number_input("粉丝数", min_value=0, step=1000)
+        c_name = st.text_input("Candidate Name")
+        c_platform = st.selectbox("Platform", ["Instagram", "TikTok", "YouTube", "Blog", "Other"])
+        c_followers = st.number_input("Followers", min_value=0, step=1000)
         c_engagement = st.number_input(
-            "互动率（0-1，例如 0.03 表示 3%）",
+            "Engagement Rate (0-1, e.g., 0.03 = 3%)",
             min_value=0.0,
             max_value=1.0,
             step=0.01,
             format="%.3f",
         )
-        c_region = st.text_input("受众主要地区", placeholder="例如：台湾地区、北美")
-        c_price = st.number_input("预估报价（新台币）", min_value=0, step=1000)
-        c_keywords = st.text_input("内容关键词（逗号分隔）")
-        c_summary = st.text_area("内容摘要（可选）", height=80)
+        c_region = st.text_input("Audience Region", placeholder="e.g., Taiwan, North America")
+        c_price = st.number_input("Estimated Price (TWD)", min_value=0, step=1000)
+        c_keywords = st.text_input("Content Keywords (comma-separated)")
+        c_summary = st.text_area("Content Summary (optional)", height=80)
 
-        add_manual = st.form_submit_button("加入候选人")
+        add_manual = st.form_submit_button("Add candidate")
 
     if add_manual and c_name:
         candidates.append({
@@ -185,28 +193,32 @@ else:
             "audience_region": c_region,
             "content_keywords": [k.strip() for k in c_keywords.split(",") if k.strip()],
         })
+        st.success(f"Candidate '{c_name}' added.")
 
-# 展示已加入的候选人
+# Show current candidates
 if candidates:
-    st.subheader("已加入的候选人")
+    st.subheader("Added Candidates")
     st.dataframe(pd.DataFrame(candidates), use_container_width=True)
+    if st.button("Clear all candidates"):
+        st.session_state["candidates"] = []
+        st.rerun()
 
 
-# ========== 3. YouTube 自动补全（可选） ==========
-st.header("3. YouTube 数据自动补全（可选）")
+# ========== 3. YouTube auto-fill (optional) ==========
+st.header("3. YouTube Auto-Fill (Optional)")
 
-if youtube_key:
+if youtube_key and YouTubeClient:
     yt_handle = st.text_input(
-        "输入 YouTube @handle 或频道 ID",
+        "YouTube @handle or Channel ID",
         placeholder="@3Blue1Brown",
     )
-    if st.button("获取 YouTube 频道数据"):
+    if st.button("Fetch YouTube channel data"):
         try:
             yt = YouTubeClient(youtube_key)
             info = yt.get_channel_by_handle(yt_handle)
             if info:
                 st.json(info)
-                if st.button("将 YouTube 频道加入候选人"):
+                if st.button("Add YouTube channel as candidate"):
                     candidates.append({
                         "name": info["title"],
                         "platform": "youtube",
@@ -217,19 +229,22 @@ if youtube_key:
                         "audience_region": info.get("country", ""),
                         "content_keywords": [],
                     })
+                    st.success("YouTube channel added.")
             else:
-                st.warning("找不到该频道")
+                st.warning("Channel not found.")
         except Exception as e:
-            st.error(f"获取失败：{e}")
+            st.error(f"Fetch failed: {e}")
+elif not YouTubeClient:
+    st.caption("YouTubeClient module not available. Skipping YouTube auto-fill.")
 else:
-    st.caption("填写 YouTube API Key 后，可自动获取频道公开数据。")
+    st.caption("Enter a YouTube API Key to auto-fetch public channel data.")
 
 
-# ========== 4. 评分与筛选 ==========
-st.header("4. 评分与筛选")
+# ========== 4. Scoring ==========
+st.header("4. Scoring & Filtering")
 
 if not candidates:
-    st.warning("请先加入至少一个候选人")
+    st.warning("Please add at least one candidate first.")
 else:
     brief = {
         "product": product,
@@ -241,41 +256,39 @@ else:
         "keywords": [k.strip() for k in keywords_text.split(",") if k.strip()],
     }
 
-    if st.button("开始评分", type="primary"):
+    if st.button("Run scoring", type="primary"):
         scored_df = score_candidates(candidates, brief)
         st.session_state["scored_df"] = scored_df
 
     if "scored_df" in st.session_state:
         df = st.session_state["scored_df"]
-        st.subheader("评分结果")
+        st.subheader("Scoring Results")
         st.dataframe(df, use_container_width=True)
 
-        # 下载 CSV
         csv = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
-            "⬇️ 下载评分表 CSV",
+            "⬇️ Download CSV",
             csv,
             "scored_candidates.csv",
             "text/csv",
         )
 
-        # 下载 Excel
         xlsx_buf = io.BytesIO()
         with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
             df.to_excel(writer, sheet_name="Candidates", index=False)
         st.download_button(
-            "⬇️ 下载评分表 Excel",
+            "⬇️ Download Excel",
             xlsx_buf.getvalue(),
             "scored_candidates.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
 
-# ========== 5. 联系草稿生成 ==========
-st.header("5. 联系草稿（需人工审核后发送）")
+# ========== 5. Outreach drafts ==========
+st.header("5. Outreach Drafts (Review before sending)")
 
 openai_key = st.text_input(
-    "OpenAI API Key（用于生成草稿，不会存储）",
+    "OpenAI API Key (used for draft generation, not stored)",
     type="password",
     value=os.environ.get("OPENAI_API_KEY", ""),
 )
@@ -284,17 +297,17 @@ if "scored_df" in st.session_state and openai_key:
     os.environ["OPENAI_API_KEY"] = openai_key
 
     df = st.session_state["scored_df"]
-    selected_name = st.selectbox("选择候选人", df["name"].tolist())
+    selected_name = st.selectbox("Select a candidate", df["name"].tolist())
 
     if selected_name:
         selected_row = df[df["name"] == selected_name].iloc[0].to_dict()
 
-        if st.button("生成 3 版英文联系草稿"):
+        if st.button("Generate 3 English outreach drafts"):
             brief = {
                 "product": product,
                 "target_market": target_market,
                 "goal": goal,
-                "budget_text": f"{budget_min} - {budget_max} 新台币",
+                "budget_text": f"{budget_min} - {budget_max} TWD",
             }
             candidate_info = {
                 "name": selected_row.get("name", ""),
@@ -304,59 +317,59 @@ if "scored_df" in st.session_state and openai_key:
                 "estimated_price": selected_row.get("estimated_price", 0),
             }
 
-            with st.spinner("生成中..."):
+            with st.spinner("Generating..."):
                 drafts = generate_outreach_drafts(brief, candidate_info)
 
             if drafts:
-                for d in drafts:
-                    st.markdown(f"**{d.get('style', '').upper()} 版**")
+                for idx, d in enumerate(drafts):
+                    st.markdown(f"**{d.get('style', '').upper()} Version**")
                     st.text_input(
-                        "主旨",
+                        "Subject",
                         d.get("subject", ""),
-                        key=f"subj_{d.get('style')}_{selected_name}",
+                        key=f"subj_{d.get('style','')}_{idx}",
                     )
                     st.text_area(
-                        "内容",
+                        "Body",
                         d.get("body", ""),
                         height=180,
-                        key=f"body_{d.get('style')}_{selected_name}",
+                        key=f"body_{d.get('style','')}_{idx}",
                     )
                     st.divider()
 
                 st.download_button(
-                    "⬇️ 下载草稿 JSON",
+                    "⬇️ Download drafts (JSON)",
                     json.dumps(drafts, ensure_ascii=False, indent=2),
                     "outreach_drafts.json",
                 )
             else:
-                st.warning("草稿生成失败，请检查 API Key 或重试。")
+                st.warning("Draft generation failed. Check your API key and try again.")
 else:
     if "scored_df" not in st.session_state:
-        st.caption("请先完成评分步骤。")
+        st.caption("Run scoring first.")
     if not openai_key:
-        st.caption("填写 OpenAI API Key 后可生成草稿。")
+        st.caption("Enter an OpenAI API Key to generate drafts.")
 
 
-# ========== 6. 合规检查清单 ==========
-st.header("6. 合作前合规检查清单")
+# ========== 6. Compliance checklist ==========
+st.header("6. Pre-Collaboration Compliance Checklist")
 
 checklist = [
-    "已确认候选人的公开数据来源合法（非私密页面、非购买名单）",
-    "已阅读并遵守目标平台的服务条款",
-    "联系草稿已人工审核，确认无误导或虚假陈述",
-    "合作条件（报酬、交付物、时间）已在书面中明确",
-    "已提供退出机制，对方可随时拒绝后续联系",
-    "涉及个资的处理符合《个人资料保护法》/ GDPR 要求",
+    "Confirmed the candidate's public data source is legal (no private pages, no purchased lists).",
+    "Read and complied with the target platform's Terms of Service.",
+    "Reviewed the outreach draft manually; no misleading or false statements.",
+    "Collaboration terms (compensation, deliverables, timeline) are documented in writing.",
+    "Provided an opt-out mechanism; the other party can decline further contact at any time.",
+    "Personal data handling complies with GDPR / local privacy laws.",
 ]
 
-for item in checklist:
-    st.checkbox(item, key=f"chk_{item}")
+for i, item in enumerate(checklist):
+    st.checkbox(item, key=f"chk_{i}")
 
 
 # ========== Footer ==========
 st.divider()
 st.caption(
-    "⚠️ 本工具仅供合规的公开数据筛选与草稿辅助。"
-    "不自动发送消息、不爬取私密数据、不群发。"
-    "使用者需自行确保遵守平台条款与当地法律。"
+    "⚠️ This tool is for compliant public-data sourcing and draft assistance only. "
+    "No auto-messaging, no private data scraping, no bulk outreach. "
+    "Users are responsible for complying with platform terms and local laws."
 )
