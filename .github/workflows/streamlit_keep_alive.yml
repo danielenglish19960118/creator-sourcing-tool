@@ -9,7 +9,33 @@ jobs:
   keep-alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Streamlit app
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Playwright
         run: |
-          curl -s -o /dev/null -w "%{http_code}" \
-            https://creator-sourcing-tool-ckxrdshrtveicftmrrkbvo.streamlit.app/
+          pip install playwright
+          playwright install chromium
+
+      - name: Visit Streamlit app
+        run: |
+          python - <<'EOF'
+          from playwright.sync_api import sync_playwright
+
+          URL = "https://creator-sourcing-tool-ckxrdshrtveicftmrrkbvo.streamlit.app/"
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              page = browser.new_page()
+              page.goto(URL, wait_until="networkidle", timeout=60000)
+              try:
+                  page.get_by_text("get this app back up", exact=False).click(timeout=5000)
+                  print("Clicked wake-up button")
+              except Exception:
+                  print("App already awake")
+              page.wait_for_timeout(10000)
+              browser.close()
+          EOF
