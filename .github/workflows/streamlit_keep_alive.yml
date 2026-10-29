@@ -1,11 +1,11 @@
-name: Streamlit Keep Alive
+name: Test Workflow
 
 on:
   workflow_dispatch:
 
 jobs:
-  keep-alive:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping app
-        run: curl -s -o /dev/null -w "%{http_code}" https://creator-sourcing-tool-ckxrdshrtveicftmrrkbvo.streamlit.app/
+      - name: Say hello
+        run: echo "Hello"
