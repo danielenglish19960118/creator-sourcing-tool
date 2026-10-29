@@ -6,8 +6,8 @@ import pandas as pd
 import streamlit as st
 
 from scraper import ComplianceScraper
-from scoring import score_candidates, DEFAULT_CRITERIA
-from draft_generator import generate_outreach_drafts
+from scoring import DEFAULT_CRITERIA
+from core_logic import build_brief, normalize_weights, source_and_score, create_drafts
 from report_generator import build_report
 
 try:
@@ -28,20 +28,6 @@ st.caption(
     "Compliance-first: only public pages, respects robots.txt, no auto-DM, no bulk messaging. "
     "All outputs must be reviewed manually before use."
 )
-
-
-# ========== Error boundary helper ==========
-def safe_section(label: str):
-    """Decorator to isolate errors per UI section."""
-    def wrapper(fn):
-        def inner(*args, **kwargs):
-            try:
-                return fn(*args, **kwargs)
-            except Exception as e:
-                st.error(f"Something went wrong in '{label}': {e}")
-                return None
-        return inner
-    return wrapper
 
 
 # ========== Sidebar: API keys ==========
@@ -76,8 +62,14 @@ col1, col2 = st.columns(2)
 
 with col1:
     product = st.text_input("Product / Service", placeholder="e.g., Taiwanese skincare brand")
-    target_market = st.text_input("Target Market", placeholder="e.g., Southeast Asia (Chinese-speaking), North America")
-    goal = st.text_area("Campaign Goal", placeholder="e.g., brand awareness, conversions, UGC content")
+    target_market = st.text_input(
+        "Target Market",
+        placeholder="e.g., Southeast Asia (Chinese-speaking), North America",
+    )
+    goal = st.text_area(
+        "Campaign Goal",
+        placeholder="e.g., brand awareness, conversions, UGC content",
+    )
 
 with col2:
     budget_min = st.number_input("Budget Min (TWD)", min_value=0, step=1000, value=5000)
@@ -89,7 +81,10 @@ with col2:
         value=(5000, 100_000),
         step=1000,
     )
-    keywords_text = st.text_input("Content Keywords (comma-separated)", placeholder="e.g., skincare, beauty, sensitive skin")
+    keywords_text = st.text_input(
+        "Content Keywords (comma-separated)",
+        placeholder="e.g., skincare, beauty, sensitive skin",
+    )
 
 
 # ========== 2. Candidate input ==========
@@ -255,11 +250,7 @@ with st.expander("⚙️ Adjust Scoring Weights", expanded=False):
         key="weights_editor",
     )
     weight_map = dict(zip(edited_weights["Criterion"], edited_weights["Weight"]))
-    total_w = sum(weight_map.values())
-    if total_w > 0:
-        normalized_weights = {k: v / total_w for k, v in weight_map.items()}
-    else:
-        normalized_weights = {item["criterion"]: item["weight"] for item in DEFAULT_CRITERIA}
+    normalized_weights = normalize_weights(weight_map)
 
     st.caption("Normalized weights used for scoring:")
     st.json({k: round(v, 3) for k, v in normalized_weights.items()})
@@ -267,19 +258,20 @@ with st.expander("⚙️ Adjust Scoring Weights", expanded=False):
 if not candidates:
     st.warning("Please add at least one candidate first.")
 else:
-    brief = {
-        "product": product,
-        "target_market": target_market,
-        "goal": goal,
-        "budget_min": budget_min,
-        "budget_max": budget_max,
-        "follower_range": follower_range,
-        "keywords": [k.strip() for k in keywords_text.split(",") if k.strip()],
-    }
+    brief = build_brief(
+        product=product,
+        target_market=target_market,
+        goal=goal,
+        budget_min=budget_min,
+        budget_max=budget_max,
+        follower_range=follower_range,
+        keywords=[k.strip() for k in keywords_text.split(",") if k.strip()],
+    )
 
     if st.button("Run scoring", type="primary"):
         with st.spinner("Scoring..."):
-            scored_df = score_candidates(candidates, brief, weights=normalized_weights)
+            results = source_and_score(candidates, brief, weights=normalized_weights)
+            scored_df = pd.DataFrame(results)
             st.session_state["scored_df"] = scored_df
         st.success(f"Scored {len(scored_df)} candidate(s).")
 
@@ -338,7 +330,7 @@ if "scored_df" in st.session_state and openai_key:
             }
 
             with st.spinner("Generating drafts..."):
-                drafts = generate_outreach_drafts(
+                drafts = create_drafts(
                     brief_for_draft,
                     candidate_info,
                     api_key=openai_key,
@@ -349,7 +341,6 @@ if "scored_df" in st.session_state and openai_key:
             else:
                 st.warning("Draft generation failed. Check your OpenAI API key.")
 
-    # Render existing drafts for the selected candidate
     existing_drafts = st.session_state["drafts_by_candidate"].get(selected_name, [])
     if existing_drafts:
         for idx, d in enumerate(existing_drafts):
@@ -382,9 +373,8 @@ checklist = [
     "Personal data handling complies with GDPR / local privacy laws.",
 ]
 
-checklist_state = {}
 for i, item in enumerate(checklist):
-    checklist_state[item] = st.checkbox(item, key=f"chk_{i}")
+    st.checkbox(item, key=f"chk_{i}")
 
 
 # ========== 7. PDF Report ==========
