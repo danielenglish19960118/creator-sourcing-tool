@@ -9,6 +9,7 @@ Scores each candidate against the client brief using weighted criteria:
 - Price vs. budget
 
 All score components are normalized to a 1-5 scale; the total is a weighted sum.
+Weights can be overridden per call via the `weights` argument.
 """
 
 from typing import Any, Optional, Tuple
@@ -85,6 +86,35 @@ def _normalize_follower_range(value: Any) -> Optional[Tuple[int, int]]:
     return None
 
 
+def _normalize_weights(weights: Optional[dict]) -> dict:
+    """
+    Merge user-provided weights with defaults and normalize so they sum to 1.0.
+
+    - Missing keys fall back to DEFAULT_CRITERIA weights.
+    - Non-numeric or negative values fall back to the default for that key.
+    - If the merged total is <= 0, use the default weights unchanged.
+    """
+    default_map = {item["criterion"]: item["weight"] for item in DEFAULT_CRITERIA}
+
+    if not weights:
+        return default_map
+
+    merged = dict(default_map)
+    for key, value in weights.items():
+        if key not in merged:
+            continue
+        v = _safe_float(value, default=-1.0)
+        if v < 0:
+            continue
+        merged[key] = v
+
+    total = sum(merged.values())
+    if total <= 0:
+        return default_map
+
+    return {k: v / total for k, v in merged.items()}
+
+
 # ---------- Individual scoring functions ----------
 def _score_followers(n: int, target_range: Optional[Tuple[int, int]]) -> int:
     """Score follower count fit against target range (1-5)."""
@@ -150,7 +180,11 @@ def _fmt_num(n: int) -> str:
 
 
 # ---------- Main entry ----------
-def score_candidates(candidates: list, brief: dict) -> pd.DataFrame:
+def score_candidates(
+    candidates: list,
+    brief: dict,
+    weights: Optional[dict] = None,
+) -> pd.DataFrame:
     """
     Score candidates against the client brief.
 
@@ -159,10 +193,17 @@ def score_candidates(candidates: list, brief: dict) -> pd.DataFrame:
         content_keywords (list or comma-separated string),
         audience_region, estimated_price
 
+    `weights` is an optional dict mapping criterion name -> weight,
+    e.g. {"Follower Fit": 0.2, "Engagement Rate": 0.3, ...}.
+    Missing keys fall back to DEFAULT_CRITERIA, and the final weights
+    are normalized to sum to 1.0.
+
     Returns a DataFrame sorted by total_score descending.
     """
     if not candidates:
         return pd.DataFrame()
+
+    normalized_weights = _normalize_weights(weights)
 
     target_kw = _normalize_keywords(brief.get("keywords"))
     target_market = _normalize_region(brief.get("target_market"))
@@ -197,11 +238,8 @@ def score_candidates(candidates: list, brief: dict) -> pd.DataFrame:
             "Price vs. Budget": price_score,
         }
 
-        # Weighted total
-        total = sum(
-            scores[item["criterion"]] * item["weight"]
-            for item in DEFAULT_CRITERIA
-        )
+        # Weighted total using the normalized weights
+        total = sum(scores[k] * normalized_weights[k] for k in scores)
 
         # Human-readable notes
         notes = [
