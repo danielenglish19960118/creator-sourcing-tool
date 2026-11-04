@@ -1,34 +1,26 @@
 """
-MCP server exposing creator-sourcing tools for OKX.AI A2MCP registration.
-
-Run locally:
-    pip install mcp
-    python mcp_server.py
-
-Expose to the internet (for OKX.AI):
-    cloudflared tunnel --url http://localhost:8000
-
-The public URL + /mcp is your A2MCP endpoint.
+Enhanced MCP server exposing creator-sourcing tools for enterprise AI agents,
+equipped with basic API key validation for rental/subscription models.
 """
 
 import json
-
+import os
 from mcp.server.fastmcp import FastMCP
-
 from core_logic import source_and_score
 
-
 mcp = FastMCP(
-    "creator-sourcing",
+    "creator-sourcing-saas",
     instructions=(
-        "Source and score micro-influencers for a brand campaign. "
-        "Accepts a JSON list of candidate objects and returns a scored shortlist."
+        "Enterprise-grade creator sourcing and scoring microservice. "
+        "Requires a valid tenant subscription key."
     ),
+    host="0.0.0.0",
+    port=int(os.environ.get("MCP_PORT", 8000)),
 )
 
-
 @mcp.tool()
-def source_creators(
+def source_creators_secure(
+    api_token: str,
     product: str,
     target_market: str,
     budget_max: int,
@@ -36,20 +28,12 @@ def source_creators(
     candidates_json: str,
 ) -> list:
     """
-    Source and score creators based on a brand brief.
-
-    Args:
-        product: Product or service name (e.g., "Taiwanese skincare brand").
-        target_market: Target market (e.g., "Southeast Asia, North America").
-        budget_max: Maximum budget per creator in TWD.
-        keywords: Comma-separated content keywords (e.g., "skincare, beauty").
-        candidates_json: JSON array of candidate objects. Each must contain:
-            name, platform, followers, engagement_rate, estimated_price,
-            audience_region, content_keywords
-
-    Returns:
-        List of scored candidates with total_score and per-criterion scores.
+    Securely source and score creators based on a brand brief with token validation.
     """
+    expected_token = os.environ.get("SAAS_MASTER_TOKEN", "demo-token-123")
+    if api_token != expected_token:
+        raise PermissionError("Invalid or expired SaaS subscription token.")
+
     try:
         candidates = json.loads(candidates_json)
     except json.JSONDecodeError as e:
@@ -70,4 +54,4 @@ def source_creators(
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)
+    mcp.run(transport="streamable-http")
