@@ -51,12 +51,12 @@ st.markdown("""
         font-size: 14px;
     }
     .hero-title {
-        font-size: 2.5rem;
+        font-size: 2.3rem;
         font-weight: 800;
         color: #1f2937;
     }
     .hero-subtitle {
-        font-size: 1.2rem;
+        font-size: 1.1rem;
         color: #4b5563;
     }
     .pricing-card {
@@ -161,41 +161,38 @@ if nav_page == "📖 Product Overview (Copywriting)":
     
     st.divider()
 
-    # Section 1: The Pain Point & Solution
     col_p1, col_p2 = st.columns(2)
     with col_p1:
         st.subheader("❌ The Old, Painful Way")
         st.markdown(
-            "- **Hours Wasted Manually Searching**: Endless scrolling through Instagram or YouTube to find relevant creators.\n"
-            "- **Unreliable Metrics**: Relying on gut feelings instead of real engagement rates and audience alignment.\n"
-            "- **Risk of Account Bans**: Using aggressive web scrapers or illegal bulk messaging tools that violate platform ToS."
+            "- **Hours Wasted Manually Searching**: Endless scrolling through social media.\n"
+            "- **Unreliable Metrics**: Relying on gut feelings instead of data.\n"
+            "- **Risk of Account Bans**: Using aggressive web scrapers violating platform ToS."
         )
     with col_p2:
         st.subheader("✅ The Creator Sourcing SaaS Way")
         st.markdown(
-            "- **Automated Discovery**: Scrape public pages or fetch verified official YouTube metrics instantly[cite: 8].\n"
-            "- **Weighted Scoring Engine**: Multi-factor evaluation covering follower fit, engagement rate, geography, and budget[cite: 8].\n"
-            "- **Compliance-First**: Strictly respects `robots.txt` and platform terms with manual review safeguards[cite: 8]."
+            "- **Automated Discovery**: Scrape public pages or fetch verified official metrics instantly[cite: 8].\n"
+            "- **Weighted Scoring Engine**: Multi-factor evaluation covering follower fit, engagement rate, and budget[cite: 8].\n"
+            "- **Compliance-First**: Strictly respects `robots.txt` and platform terms[cite: 8]."
         )
 
     st.divider()
 
-    # Section 2: Key Features
     st.header("⚡ Core Enterprise Features")
     feat_c1, feat_c2, feat_c3 = st.columns(3)
     with feat_c1:
         st.markdown("### 🔍 Compliant Web Scraper")
-        st.write("Safely extracts public metadata from static web pages while strictly respecting `robots.txt` and SSRF protection[cite: 8].")
+        st.write("Safely extracts public metadata from static web pages respecting `robots.txt`[cite: 8].")
     with feat_c2:
         st.markdown("### 📊 5-Dimension Scoring")
-        st.write("Ranks creators automatically based on follower range, engagement rate, keyword overlap, region, and budget[cite: 8].")
+        st.write("Ranks creators automatically based on follower range, engagement rate, and region[cite: 8].")
     with feat_c3:
         st.markdown("### 🤖 AI Outreach Generator")
-        st.write("Generates highly personalized English outreach drafts in 3 professional tones (formal, friendly, short)[cite: 8].")
+        st.write("Generates highly personalized English outreach drafts in 3 professional tones[cite: 8].")
 
     st.divider()
 
-    # Section 3: Pricing Tiers
     st.header("💎 Flexible Pricing Plans")
     pr_c1, pr_c2 = st.columns(2)
     with pr_c1:
@@ -203,15 +200,13 @@ if nav_page == "📖 Product Overview (Copywriting)":
         <div class="pricing-card">
             <h3>Free Tier</h3>
             <h2>$0 / month</h2>
-            <p>Perfect for testing out the platform.</p>
+            <p>Test out the platform with limited quota.</p>
             <hr>
             <ul style="text-align: left; list-style: none; padding: 0;">
-                <li>✔️ Up to 3 AI Draft Generations</li>
+                <li>✔️ 3 Free AI Draft Generations</li>
                 <li>✔️ Basic Public Scraping & Scoring</li>
                 <li>✔️ CSV / Excel Report Export</li>
             </ul>
-            <br>
-            <a href="https://your-payment-page.com" target="_blank">Get Started Free</a>
         </div>
         """, unsafe_allow_html=True)
     with pr_c2:
@@ -225,10 +220,8 @@ if nav_page == "📖 Product Overview (Copywriting)":
                 <li>✔️ Unlimited AI Draft Generations</li>
                 <li>✔️ Advanced Multi-Tenant Customization</li>
                 <li>✔️ Enterprise PDF Report Export</li>
-                <li>✔️ Automated Lemon Squeezy / PayPal Checkout</li>
+                <li>✔️ Instant Lemon Squeezy / PayPal Checkout</li>
             </ul>
-            <br>
-            <a href="https://your-payment-page.com" target="_blank" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Upgrade to Pro</a>
         </div>
         """, unsafe_allow_html=True)
 
@@ -246,7 +239,6 @@ user_profile = get_user_profile(st.session_state["user"]["email"])
 current_tier = user_profile.get("tier", "free")
 
 
-# Main Title Header
 col_title, col_tier = st.columns([4, 1])
 with col_title:
     st.title("🚀 Creator Sourcing & Outreach SaaS Engine")
@@ -396,7 +388,7 @@ ai_limit = user_profile.get("ai_limit", 3)
 
 if current_tier == "free" and current_usage >= ai_limit:
     st.error(f"❌ **Free Tier Limit Reached ({current_usage}/{ai_limit})**: You have used all free AI outreach generations.")
-    st.markdown("[👉 Upgrade to Pro Plan to unlock unlimited AI generations](https://your-payment-page.com)")
+    st.markdown("[👉 Upgrade to Pro Plan via Lemon Squeezy / PayPal](https://your-payment-page.com)")
 else:
     if "scored_df" in st.session_state and openai_key:
         df = st.session_state["scored_df"]
