@@ -193,7 +193,10 @@ if nav_page == "📖 Product Overview (Copywriting)":
 
     st.divider()
 
-    st.header("💎 Flexible Pricing Plans")
+    # 詳細列出所有國內外支付管道的 Pricing Section
+    st.header("💎 Flexible Pricing Plans & Supported Payment Channels")
+    st.caption("We support fully automated, instant tier provisioning across all major global and local payment gateways.")
+    
     pr_c1, pr_c2 = st.columns(2)
     with pr_c1:
         st.markdown("""
@@ -220,8 +223,13 @@ if nav_page == "📖 Product Overview (Copywriting)":
                 <li>✔️ Unlimited AI Draft Generations</li>
                 <li>✔️ Advanced Multi-Tenant Customization</li>
                 <li>✔️ Enterprise PDF Report Export</li>
-                <li>✔️ Instant Lemon Squeezy / PayPal Checkout</li>
+                <li>✔️ <b>Instant Automated Account Provisioning</b></li>
             </ul>
+            <hr>
+            <p style="font-size: 0.9rem; font-weight: bold; color: #333;">🌍 Supported Global Payment Channels:</p>
+            <p style="font-size: 0.85rem; color: #555;">Lemon Squeezy, Gumroad, PayPal, Stripe</p>
+            <p style="font-size: 0.9rem; font-weight: bold; color: #333;">🇹🇼 Supported Local Payment Channels (Taiwan):</p>
+            <p style="font-size: 0.85rem; color: #555;">ECPay (綠界), NewebPay (藍新), LINE Pay</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -388,7 +396,7 @@ ai_limit = user_profile.get("ai_limit", 3)
 
 if current_tier == "free" and current_usage >= ai_limit:
     st.error(f"❌ **Free Tier Limit Reached ({current_usage}/{ai_limit})**: You have used all free AI outreach generations.")
-    st.markdown("[👉 Upgrade to Pro Plan via Lemon Squeezy / PayPal](https://your-payment-page.com)")
+    st.markdown("[👉 Upgrade to Pro Plan via Lemon Squeezy / PayPal / ECPay](https://your-payment-page.com)")
 else:
     if "scored_df" in st.session_state and openai_key:
         df = st.session_state["scored_df"]
