@@ -50,6 +50,23 @@ st.markdown("""
         font-weight: bold;
         font-size: 14px;
     }
+    .hero-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #1f2937;
+    }
+    .hero-subtitle {
+        font-size: 1.2rem;
+        color: #4b5563;
+    }
+    .pricing-card {
+        background-color: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -62,7 +79,7 @@ db_client = create_client(SUPABASE_URL, SUPABASE_KEY) if (create_client and SUPA
 
 # ========== Authentication & Session State ==========
 if "user" not in st.session_state:
-    st.session_state["user"] = None  # Stores user email & tier info
+    st.session_state["user"] = None
 
 def get_user_profile(email: str):
     """Fetch user subscription tier and usage from Supabase."""
@@ -73,7 +90,6 @@ def get_user_profile(email: str):
         if res.data:
             return res.data[0]
         else:
-            # Default new user to free tier with 3 free AI generations
             new_record = {"email": email, "tier": "free", "ai_usage": 0, "ai_limit": 3, "is_active": True}
             db_client.table("tenants").insert(new_record).execute()
             return new_record
@@ -81,7 +97,6 @@ def get_user_profile(email: str):
         return {"tier": "free", "ai_usage": 0, "ai_limit": 3}
 
 def increment_ai_usage(email: str, current_usage: int):
-    """Increment AI generation usage in Supabase."""
     if db_client:
         try:
             db_client.table("tenants").update({"ai_usage": current_usage + 1}).eq("email", email).execute()
@@ -89,60 +104,154 @@ def increment_ai_usage(email: str, current_usage: int):
             pass
 
 
-# ========== Sidebar: Authentication & Settings ==========
+# ========== Sidebar: Authentication & Navigation ==========
 with st.sidebar:
-    st.header("🔐 SaaS Account Portal")
+    st.header("🔐 SaaS Portal")
     
     if st.session_state["user"] is None:
-        st.caption("Please sign in or register to access the platform.")
-        auth_mode = st.radio("Mode", ["Sign In", "Register"], horizontal=True)
-        
+        st.caption("Sign in to access your dashboard.")
         auth_email = st.text_input("Email Address")
         auth_password = st.text_input("Password", type="password")
         
-        if st.button("🚀 Submit", type="primary"):
+        if st.button("🚀 Sign In / Register", type="primary"):
             if not auth_email or not auth_password:
                 st.warning("Please fill in all fields.")
             else:
-                # Simple email-based session mock or real Supabase auth
                 profile = get_user_profile(auth_email)
                 st.session_state["user"] = profile
                 st.success(f"Welcome, {auth_email}!")
                 st.rerun()
-        
-        st.stop()  # Stop rendering main app until signed in
     else:
         user = st.session_state["user"]
         email = user.get("email")
-        # Refresh profile info
         profile = get_user_profile(email)
         tier = profile.get("tier", "free")
         usage = profile.get("ai_usage", 0)
         limit = profile.get("ai_limit", 3)
         
         st.write(f"👤 **Account**: {email}")
-        if tier == "pro" or tier == "agency":
+        if tier in ["pro", "agency"]:
             st.markdown('<span class="badge-tier">PRO TIER (UNLIMITED)</span>', unsafe_allow_html=True)
         else:
-            st.markdown(f'<span class="badge-free">FREE TIER ({usage}/{limit} AI Used)</span>', unsafe_allow_html=True)
+            st.markdown(f'<span class="badge-free">FREE PLAN ({usage}/{limit} AI Used)</span>', unsafe_allow_html=True)
             st.markdown("[👉 Upgrade to Pro ($49/mo)](https://your-payment-page.com)")
         
         if st.button("🚪 Sign Out"):
             st.session_state["user"] = None
             st.rerun()
 
+    st.divider()
+    st.markdown("### 🧭 Navigation")
+    nav_page = st.radio("Go to", ["📖 Product Overview (Copywriting)", "⚡ SaaS App Workspace"])
+
+    if st.session_state["user"]:
         st.divider()
         youtube_key = st.text_input("YouTube Data API Key", type="password", value=os.environ.get("YOUTUBE_API_KEY", ""))
         openai_key = st.text_input("OpenAI API Key (BYOK)", type="password", value=os.environ.get("OPENAI_API_KEY", ""))
+    else:
+        youtube_key, openai_key = "", ""
 
 
-# ========== Main Header ==========
+# =========================================================================
+# PAGE 1: PRODUCT OVERVIEW & COPYWRITING PAGE (Landing Page)
+# =========================================================================
+if nav_page == "📖 Product Overview (Copywriting)":
+    st.markdown('<p class="hero-title">🚀 Scale Your Influencer Marketing with 100% Compliance & AI Automation</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-subtitle">The ultimate enterprise-grade creator sourcing, multi-factor scoring, and AI outreach solution built for modern marketing agencies and cross-border e-commerce brands.</p>', unsafe_allow_html=True)
+    
+    st.divider()
+
+    # Section 1: The Pain Point & Solution
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        st.subheader("❌ The Old, Painful Way")
+        st.markdown(
+            "- **Hours Wasted Manually Searching**: Endless scrolling through Instagram or YouTube to find relevant creators.\n"
+            "- **Unreliable Metrics**: Relying on gut feelings instead of real engagement rates and audience alignment.\n"
+            "- **Risk of Account Bans**: Using aggressive web scrapers or illegal bulk messaging tools that violate platform ToS."
+        )
+    with col_p2:
+        st.subheader("✅ The Creator Sourcing SaaS Way")
+        st.markdown(
+            "- **Automated Discovery**: Scrape public pages or fetch verified official YouTube metrics instantly[cite: 8].\n"
+            "- **Weighted Scoring Engine**: Multi-factor evaluation covering follower fit, engagement rate, geography, and budget[cite: 8].\n"
+            "- **Compliance-First**: Strictly respects `robots.txt` and platform terms with manual review safeguards[cite: 8]."
+        )
+
+    st.divider()
+
+    # Section 2: Key Features
+    st.header("⚡ Core Enterprise Features")
+    feat_c1, feat_c2, feat_c3 = st.columns(3)
+    with feat_c1:
+        st.markdown("### 🔍 Compliant Web Scraper")
+        st.write("Safely extracts public metadata from static web pages while strictly respecting `robots.txt` and SSRF protection[cite: 8].")
+    with feat_c2:
+        st.markdown("### 📊 5-Dimension Scoring")
+        st.write("Ranks creators automatically based on follower range, engagement rate, keyword overlap, region, and budget[cite: 8].")
+    with feat_c3:
+        st.markdown("### 🤖 AI Outreach Generator")
+        st.write("Generates highly personalized English outreach drafts in 3 professional tones (formal, friendly, short)[cite: 8].")
+
+    st.divider()
+
+    # Section 3: Pricing Tiers
+    st.header("💎 Flexible Pricing Plans")
+    pr_c1, pr_c2 = st.columns(2)
+    with pr_c1:
+        st.markdown("""
+        <div class="pricing-card">
+            <h3>Free Tier</h3>
+            <h2>$0 / month</h2>
+            <p>Perfect for testing out the platform.</p>
+            <hr>
+            <ul style="text-align: left; list-style: none; padding: 0;">
+                <li>✔️ Up to 3 AI Draft Generations</li>
+                <li>✔️ Basic Public Scraping & Scoring</li>
+                <li>✔️ CSV / Excel Report Export</li>
+            </ul>
+            <br>
+            <a href="https://your-payment-page.com" target="_blank">Get Started Free</a>
+        </div>
+        """, unsafe_allow_html=True)
+    with pr_c2:
+        st.markdown("""
+        <div class="pricing-card" style="border: 2px solid #4CAF50;">
+            <h3>Pro Agency Tier</h3>
+            <h2>$49 / month</h2>
+            <p>Designed for scaling marketing agencies.</p>
+            <hr>
+            <ul style="text-align: left; list-style: none; padding: 0;">
+                <li>✔️ Unlimited AI Draft Generations</li>
+                <li>✔️ Advanced Multi-Tenant Customization</li>
+                <li>✔️ Enterprise PDF Report Export</li>
+                <li>✔️ Automated Lemon Squeezy / PayPal Checkout</li>
+            </ul>
+            <br>
+            <a href="https://your-payment-page.com" target="_blank" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">Upgrade to Pro</a>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.stop()
+
+
+# =========================================================================
+# PAGE 2: SAAS APP WORKSPACE (Protected by Login)
+# =========================================================================
+if st.session_state["user"] is None:
+    st.warning("🔒 **Access Restricted**: Please sign in using the sidebar portal, or switch to the **Product Overview** page to learn more.")
+    st.stop()
+
+user_profile = get_user_profile(st.session_state["user"]["email"])
+current_tier = user_profile.get("tier", "free")
+
+
+# Main Title Header
 col_title, col_tier = st.columns([4, 1])
 with col_title:
     st.title("🚀 Creator Sourcing & Outreach SaaS Engine")
     st.caption("Compliance-first influencer discovery and AI outreach automation built for global marketing agencies and brands.")
 with col_tier:
-    current_tier = st.session_state["user"].get("tier", "free")
     if current_tier in ["pro", "agency"]:
         st.markdown('<br><span class="badge-tier">PRO AGENCY TIER</span>', unsafe_allow_html=True)
     else:
@@ -180,7 +289,7 @@ if "candidates" not in st.session_state:
 candidates = st.session_state["candidates"]
 
 if input_mode == "Paste Public URLs (Compliant Scraping)":
-    st.info("Supports **public, static web pages allowing crawling via robots.txt**.")
+    st.info("Supports **public, static web pages allowing crawling via robots.txt**[cite: 8].")
     urls_text = st.text_area("One public URL per line", placeholder="https://example-creator.com/about", height=120)
 
     if st.button("🚀 Scrape Public Page Metadata", type="primary"):
@@ -279,11 +388,9 @@ else:
         st.dataframe(st.session_state["scored_df"], use_container_width=True)
 
 
-# ========== 4. AI Outreach Draft Generator (With Free vs Pro Limit) ==========
+# ========== 4. AI Outreach Draft Generator ==========
 st.header("5. AI Outreach Draft Generator")
 
-user_profile = get_user_profile(st.session_state["user"]["email"])
-current_tier = user_profile.get("tier", "free")
 current_usage = user_profile.get("ai_usage", 0)
 ai_limit = user_profile.get("ai_limit", 3)
 
@@ -304,7 +411,6 @@ else:
             
             if drafts:
                 st.success("Drafts generated successfully!")
-                # Increment usage for free tier users
                 if current_tier == "free":
                     increment_ai_usage(user_profile["email"], current_usage)
                 
