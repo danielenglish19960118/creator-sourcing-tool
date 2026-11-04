@@ -172,9 +172,9 @@ if nav_page == "📖 Product Overview (Copywriting)":
     with col_p2:
         st.subheader("✅ The Creator Sourcing SaaS Way")
         st.markdown(
-            "- **Automated Discovery**: Scrape public pages or fetch verified official metrics instantly[cite: 8].\n"
-            "- **Weighted Scoring Engine**: Multi-factor evaluation covering follower fit, engagement rate, and budget[cite: 8].\n"
-            "- **Compliance-First**: Strictly respects `robots.txt` and platform terms[cite: 8]."
+            "- **Automated Discovery**: Scrape public pages or fetch verified official metrics instantly.\n"
+            "- **Weighted Scoring Engine**: Multi-factor evaluation covering follower fit, engagement rate, and budget.\n"
+            "- **Compliance-First**: Strictly respects `robots.txt` and platform terms."
         )
 
     st.divider()
@@ -183,17 +183,16 @@ if nav_page == "📖 Product Overview (Copywriting)":
     feat_c1, feat_c2, feat_c3 = st.columns(3)
     with feat_c1:
         st.markdown("### 🔍 Compliant Web Scraper")
-        st.write("Safely extracts public metadata from static web pages respecting `robots.txt`[cite: 8].")
+        st.write("Safely extracts public metadata from static web pages respecting `robots.txt`.")
     with feat_c2:
         st.markdown("### 📊 5-Dimension Scoring")
-        st.write("Ranks creators automatically based on follower range, engagement rate, and region[cite: 8].")
+        st.write("Ranks creators automatically based on follower range, engagement rate, and region.")
     with feat_c3:
         st.markdown("### 🤖 AI Outreach Generator")
-        st.write("Generates highly personalized English outreach drafts in 3 professional tones[cite: 8].")
+        st.write("Generates highly personalized English outreach drafts in 3 professional tones.")
 
     st.divider()
 
-    # 詳細列出所有國內外支付管道的 Pricing Section
     st.header("💎 Flexible Pricing Plans & Supported Payment Channels")
     st.caption("We support fully automated, instant tier provisioning across all major global and local payment gateways.")
     
@@ -289,7 +288,7 @@ if "candidates" not in st.session_state:
 candidates = st.session_state["candidates"]
 
 if input_mode == "Paste Public URLs (Compliant Scraping)":
-    st.info("Supports **public, static web pages allowing crawling via robots.txt**[cite: 8].")
+    st.info("Supports **public, static web pages allowing crawling via robots.txt**.")
     urls_text = st.text_area("One public URL per line", placeholder="https://example-creator.com/about", height=120)
 
     if st.button("🚀 Scrape Public Page Metadata", type="primary"):
