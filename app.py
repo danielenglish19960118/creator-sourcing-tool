@@ -156,8 +156,8 @@ with st.sidebar:
 # PAGE 1: PRODUCT OVERVIEW & COPYWRITING PAGE (Landing Page)
 # =========================================================================
 if nav_page == "📖 Product Overview (Copywriting)":
-    st.markdown('<p class="hero-title">🚀 Scale Your Influencer Marketing with 100% Compliance & AI Automation</p>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-subtitle">The ultimate enterprise-grade creator sourcing, multi-factor scoring, and AI outreach solution built for modern marketing agencies and cross-border e-commerce brands.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-title">🚀 AI-Powered Influencer Sourcing & Compliance-First SaaS Engine</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-subtitle">Instantly discover, vet, and score top-tier creators across YouTube & Instagram while strictly adhering to platform Terms of Service. Built for global marketing agencies.</p>', unsafe_allow_html=True)
     
     st.divider()
 
@@ -241,8 +241,8 @@ current_tier = user_profile.get("tier", "free")
 
 col_title, col_tier = st.columns([4, 1])
 with col_title:
-    st.title("🚀 Creator Sourcing & Outreach SaaS Engine")
-    st.caption("Compliance-first influencer discovery and AI outreach automation built for global marketing agencies and brands.")
+    st.title("🚀 AI-Powered Influencer Sourcing & Compliance-First SaaS Engine")
+    st.caption("Instantly discover, vet, and score top-tier creators across YouTube & Instagram while strictly adhering to platform Terms of Service. Built for global marketing agencies.")
 with col_tier:
     if current_tier in ["pro", "agency"]:
         st.markdown('<br><span class="badge-tier">PRO AGENCY TIER</span>', unsafe_allow_html=True)
