@@ -11,7 +11,6 @@ from core_logic import build_brief, normalize_weights, source_and_score, create_
 from report_generator import build_report
 from config import TenantConfig
 
-# 導入 Supabase SDK 用於動態授權驗證
 try:
     from supabase import create_client
 except ImportError:
@@ -43,68 +42,111 @@ st.markdown("""
         font-weight: bold;
         font-size: 14px;
     }
+    .badge-free {
+        background-color: #ff9800;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-weight: bold;
+        font-size: 14px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Main Title Header
+
+# ========== Initialize Supabase Connection ==========
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+db_client = create_client(SUPABASE_URL, SUPABASE_KEY) if (create_client and SUPABASE_URL and SUPABASE_KEY) else None
+
+
+# ========== Authentication & Session State ==========
+if "user" not in st.session_state:
+    st.session_state["user"] = None  # Stores user email & tier info
+
+def get_user_profile(email: str):
+    """Fetch user subscription tier and usage from Supabase."""
+    if not db_client:
+        return {"tier": "free", "ai_usage": 0, "ai_limit": 3}
+    try:
+        res = db_client.table("tenants").select("*").eq("email", email).execute()
+        if res.data:
+            return res.data[0]
+        else:
+            # Default new user to free tier with 3 free AI generations
+            new_record = {"email": email, "tier": "free", "ai_usage": 0, "ai_limit": 3, "is_active": True}
+            db_client.table("tenants").insert(new_record).execute()
+            return new_record
+    except Exception:
+        return {"tier": "free", "ai_usage": 0, "ai_limit": 3}
+
+def increment_ai_usage(email: str, current_usage: int):
+    """Increment AI generation usage in Supabase."""
+    if db_client:
+        try:
+            db_client.table("tenants").update({"ai_usage": current_usage + 1}).eq("email", email).execute()
+        except Exception:
+            pass
+
+
+# ========== Sidebar: Authentication & Settings ==========
+with st.sidebar:
+    st.header("🔐 SaaS Account Portal")
+    
+    if st.session_state["user"] is None:
+        st.caption("Please sign in or register to access the platform.")
+        auth_mode = st.radio("Mode", ["Sign In", "Register"], horizontal=True)
+        
+        auth_email = st.text_input("Email Address")
+        auth_password = st.text_input("Password", type="password")
+        
+        if st.button("🚀 Submit", type="primary"):
+            if not auth_email or not auth_password:
+                st.warning("Please fill in all fields.")
+            else:
+                # Simple email-based session mock or real Supabase auth
+                profile = get_user_profile(auth_email)
+                st.session_state["user"] = profile
+                st.success(f"Welcome, {auth_email}!")
+                st.rerun()
+        
+        st.stop()  # Stop rendering main app until signed in
+    else:
+        user = st.session_state["user"]
+        email = user.get("email")
+        # Refresh profile info
+        profile = get_user_profile(email)
+        tier = profile.get("tier", "free")
+        usage = profile.get("ai_usage", 0)
+        limit = profile.get("ai_limit", 3)
+        
+        st.write(f"👤 **Account**: {email}")
+        if tier == "pro" or tier == "agency":
+            st.markdown('<span class="badge-tier">PRO TIER (UNLIMITED)</span>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<span class="badge-free">FREE TIER ({usage}/{limit} AI Used)</span>', unsafe_allow_html=True)
+            st.markdown("[👉 Upgrade to Pro ($49/mo)](https://your-payment-page.com)")
+        
+        if st.button("🚪 Sign Out"):
+            st.session_state["user"] = None
+            st.rerun()
+
+        st.divider()
+        youtube_key = st.text_input("YouTube Data API Key", type="password", value=os.environ.get("YOUTUBE_API_KEY", ""))
+        openai_key = st.text_input("OpenAI API Key (BYOK)", type="password", value=os.environ.get("OPENAI_API_KEY", ""))
+
+
+# ========== Main Header ==========
 col_title, col_tier = st.columns([4, 1])
 with col_title:
     st.title("🚀 Creator Sourcing & Outreach SaaS Engine")
-    st.caption(
-        "Compliance-first influencer discovery and AI outreach automation built for global marketing agencies and brands."
-    )
+    st.caption("Compliance-first influencer discovery and AI outreach automation built for global marketing agencies and brands.")
 with col_tier:
-    st.markdown('<br><span class="badge-tier">PRO AGENCY TIER</span>', unsafe_allow_html=True)
-
-
-# ========== Sidebar: Automated Tenant & API settings ==========
-with st.sidebar:
-    st.header("🏢 Tenant & API Settings")
-    st.caption("Enter your subscription key and official API credentials.")
-
-    tenant_key = st.text_input(
-        "SaaS Subscription Key",
-        value=os.environ.get("SAAS_MASTER_TOKEN", "demo-pro-tenant"),
-        type="password"
-    )
-    
-    # 動態驗證 Supabase 資料庫中的 Token 授權
-    supabase_url = os.environ.get("SUPABASE_URL", "")
-    supabase_key = os.environ.get("SUPABASE_KEY", "")
-    
-    if tenant_key and create_client and supabase_url and supabase_key:
-        try:
-            db = create_client(supabase_url, supabase_key)
-            res = db.table("tenants").select("*").eq("api_token", tenant_key).eq("is_active", True).execute()
-            if res.data:
-                tenant_info = res.data[0]
-                st.success(f"✅ Active Tier: {tenant_info['tier'].upper()}")
-                st.caption(f"Remaining AI Quota: {tenant_info.get('ai_drafts_quota', 'Unlimited')}")
-            elif tenant_key == os.environ.get("SAAS_MASTER_TOKEN", "demo-pro-tenant"):
-                st.info("ℹ️ Master Demo Token Active")
-            else:
-                st.error("❌ Invalid or expired subscription token.")
-        except Exception as e:
-            st.warning("⚠️ Database auth offline; running standalone mode.")
-    
-    youtube_key = st.text_input(
-        "YouTube Data API Key",
-        type="password",
-        value=os.environ.get("YOUTUBE_API_KEY", ""),
-    )
-    openai_key = st.text_input(
-        "OpenAI API Key (BYOK)",
-        type="password",
-        value=os.environ.get("OPENAI_API_KEY", ""),
-    )
-
-    st.divider()
-    st.markdown(
-        "**🛡️ Compliance & Privacy**\n"
-        "- Strictly respects `robots.txt` and platform ToS.\n"
-        "- NO auto-DM or bulk messaging. All drafts require manual review.\n"
-        "- Multi-tenant data isolation; zero private data storage."
-    )
+    current_tier = st.session_state["user"].get("tier", "free")
+    if current_tier in ["pro", "agency"]:
+        st.markdown('<br><span class="badge-tier">PRO AGENCY TIER</span>', unsafe_allow_html=True)
+    else:
+        st.markdown('<br><span class="badge-free">FREE PLAN</span>', unsafe_allow_html=True)
 
 
 # ========== 1. Campaign Brief ==========
@@ -114,29 +156,14 @@ col1, col2 = st.columns(2)
 
 with col1:
     product = st.text_input("Product / Service Name", value="Global Skincare Brand")
-    target_market = st.text_input(
-        "Target Market",
-        value="Southeast Asia, North America",
-    )
-    goal = st.text_area(
-        "Campaign Goal",
-        value="Brand awareness, high-converting UGC content, regional market entry",
-    )
+    target_market = st.text_input("Target Market", value="Southeast Asia, North America")
+    goal = st.text_area("Campaign Goal", value="Brand awareness, high-converting UGC content, regional market entry")
 
 with col2:
     budget_min = st.number_input("Budget Min (TWD/USD)", min_value=0, step=1000, value=5000)
     budget_max = st.number_input("Budget Max (TWD/USD)", min_value=0, step=1000, value=25000)
-    follower_range = st.slider(
-        "Target Follower Range",
-        min_value=1000,
-        max_value=1_000_000,
-        value=(5000, 150_000),
-        step=1000,
-    )
-    keywords_text = st.text_input(
-        "Content Keywords (comma-separated)",
-        value="skincare, beauty, glowing skin, sensitive skin",
-    )
+    follower_range = st.slider("Target Follower Range", min_value=1000, max_value=1_000_000, value=(5000, 150_000), step=1000)
+    keywords_text = st.text_input("Content Keywords (comma-separated)", value="skincare, beauty, glowing skin, sensitive skin")
 
 
 # ========== 2. Candidate Input ==========
@@ -152,14 +179,9 @@ if "candidates" not in st.session_state:
     st.session_state["candidates"] = []
 candidates = st.session_state["candidates"]
 
-
 if input_mode == "Paste Public URLs (Compliant Scraping)":
-    st.info("Supports **public, static web pages allowing crawling via robots.txt**. Do not input login pages.")
-    urls_text = st.text_area(
-        "One public URL per line",
-        placeholder="https://example-creator.com/about\nhttps://another-creator.com",
-        height=120,
-    )
+    st.info("Supports **public, static web pages allowing crawling via robots.txt**.")
+    urls_text = st.text_area("One public URL per line", placeholder="https://example-creator.com/about", height=120)
 
     if st.button("🚀 Scrape Public Page Metadata", type="primary"):
         if not urls_text.strip():
@@ -169,23 +191,16 @@ if input_mode == "Paste Public URLs (Compliant Scraping)":
                 scraper = ComplianceScraper()
                 urls = [u.strip() for u in urls_text.splitlines() if u.strip()]
                 results = []
-                progress = st.progress(0)
-                for i, url in enumerate(urls):
-                    res = scraper.scrape_page(url)
-                    results.append(res)
-                    progress.progress((i + 1) / len(urls))
+                for url in urls:
+                    results.append(scraper.scrape_page(url))
                 st.session_state["scraped_results"] = results
             st.success(f"Successfully scraped {len(results)} page(s).")
 
     if "scraped_results" in st.session_state:
         for idx, r in enumerate(st.session_state["scraped_results"]):
-            if "error" in r:
-                st.error(f"❌ {r['url']}: {r['error']}")
-            else:
+            if "error" not in r:
                 with st.expander(f"✅ {r['url']}"):
                     st.write(f"**Title**: {r.get('page_title', '')}")
-                    st.write(f"**OG Title**: {r.get('og_title', '')}")
-                    st.write(f"**Meta Description**: {r.get('meta_description', '')}")
                     if st.button("Add to Candidates", key=f"add_scraped_{idx}"):
                         candidates.append({
                             "name": r.get("og_title") or r.get("page_title", r["url"]),
@@ -198,19 +213,18 @@ if input_mode == "Paste Public URLs (Compliant Scraping)":
                             "content_keywords": ["beauty", "skincare"],
                             "source_url": r["url"],
                         })
-                        st.success("Candidate added successfully.")
+                        st.success("Candidate added.")
 
 elif input_mode == "Enter Candidate Manually":
     with st.form("manual_candidate_form", clear_on_submit=True):
         c_name = st.text_input("Candidate Name / Handle")
         c_platform = st.selectbox("Platform", ["Instagram", "TikTok", "YouTube", "Blog", "Other"])
         c_followers = st.number_input("Followers", min_value=0, step=1000, value=25000)
-        c_engagement = st.number_input("Engagement Rate (e.g., 0.042 = 4.2%)", min_value=0.0, max_value=1.0, value=0.042, step=0.005)
+        c_engagement = st.number_input("Engagement Rate", min_value=0.0, max_value=1.0, value=0.042, step=0.005)
         c_region = st.text_input("Audience Region", value="Taiwan, SE Asia")
-        c_price = st.number_input("Estimated Price (TWD/USD)", min_value=0, step=1000, value=12000)
-        c_keywords = st.text_input("Content Keywords (comma-separated)", value="skincare, beauty, lifestyle")
-        c_summary = st.text_area("Content Summary / Style Notes", value="Focuses on natural skincare routines and product reviews.")
-
+        c_price = st.number_input("Estimated Price", min_value=0, step=1000, value=12000)
+        c_keywords = st.text_input("Content Keywords", value="skincare, beauty")
+        c_summary = st.text_area("Content Summary", value="Skincare routines.")
         add_manual = st.form_submit_button("➕ Add Candidate")
 
     if add_manual and c_name:
@@ -227,260 +241,78 @@ elif input_mode == "Enter Candidate Manually":
         st.success(f"Candidate '{c_name}' added.")
 
 else:
-    st.caption("Load sample candidate dataset for instant testing:")
     if st.button("📥 Load Demo Candidates (3 Influencers)"):
-        demo_data = [
-            {
-                "name": "BeautyWithEmma",
-                "platform": "instagram",
-                "followers": 45000,
-                "engagement_rate": 0.048,
-                "content_summary": "Skincare enthusiast focusing on East Asian beauty brands.",
-                "estimated_price": 12000,
-                "audience_region": "Southeast Asia, Taiwan",
-                "content_keywords": ["skincare", "beauty", "glowing skin"]
-            },
-            {
-                "name": "TechSkinLab",
-                "platform": "youtube",
-                "followers": 120000,
-                "engagement_rate": 0.062,
-                "content_summary": "In-depth ingredient analysis for sensitive skin.",
-                "estimated_price": 22000,
-                "audience_region": "North America",
-                "content_keywords": ["sensitive skin", "beauty", "ingredient analysis"]
-            },
-            {
-                "name": "GlowDaily_Official",
-                "platform": "tiktok",
-                "followers": 85000,
-                "engagement_rate": 0.075,
-                "content_summary": "Short-form video UGC style product reviews.",
-                "estimated_price": 15000,
-                "audience_region": "Taiwan",
-                "content_keywords": ["ugc", "skincare", "beauty"]
-            }
+        st.session_state["candidates"] = [
+            {"name": "BeautyWithEmma", "platform": "instagram", "followers": 45000, "engagement_rate": 0.048, "content_summary": "Skincare enthusiast.", "estimated_price": 12000, "audience_region": "Taiwan", "content_keywords": ["skincare"]},
+            {"name": "TechSkinLab", "platform": "youtube", "followers": 120000, "engagement_rate": 0.062, "content_summary": "Ingredient analysis.", "estimated_price": 22000, "audience_region": "North America", "content_keywords": ["sensitive skin"]},
+            {"name": "GlowDaily", "platform": "tiktok", "followers": 85000, "engagement_rate": 0.075, "content_summary": "UGC reviews.", "estimated_price": 15000, "audience_region": "Taiwan", "content_keywords": ["ugc"]}
         ]
-        st.session_state["candidates"] = demo_data
         st.rerun()
 
 if candidates:
     st.subheader(f"Added Candidates ({len(candidates)})")
     st.dataframe(pd.DataFrame(candidates), use_container_width=True)
-    if st.button("🗑️ Clear All Candidates"):
+    if st.button("🗑️ Clear All"):
         st.session_state["candidates"] = []
         st.rerun()
 
 
-# ========== 3. YouTube Auto-fill ==========
-st.header("3. YouTube Data API Auto-Fill")
-
-if youtube_key and YouTubeClient:
-    yt_handle = st.text_input("YouTube @Handle or Channel ID", placeholder="@3Blue1Brown")
-    if st.button("🔍 Fetch YouTube Data"):
-        try:
-            yt = YouTubeClient(youtube_key)
-            info = yt.get_channel_by_handle(yt_handle)
-            if info:
-                st.json(info)
-                if st.button("➕ Add YouTube Channel"):
-                    candidates.append({
-                        "name": info["title"],
-                        "platform": "youtube",
-                        "followers": info["subscribers"],
-                        "engagement_rate": info["engagement_rate"],
-                        "content_summary": info["description"],
-                        "estimated_price": 18000,
-                        "audience_region": info.get("country", "Global"),
-                        "content_keywords": ["tech", "education"],
-                    })
-                    st.success("YouTube channel added successfully.")
-            else:
-                st.warning("Channel not found.")
-        except Exception as e:
-            st.error(f"Fetch failed: {e}")
-elif not YouTubeClient:
-    st.caption("YouTubeClient module unavailable.")
-else:
-    st.caption("💡 Enter your YouTube API Key in the sidebar to enable auto-fill.")
-
-
-# ========== 4. Scoring ==========
+# ========== 3. Scoring Engine ==========
 st.header("4. Weighted Scoring & Filtering Engine")
 
-with st.expander("⚙️ Customize Scoring Weights", expanded=False):
-    st.caption("Adjust criteria weights. Weights are automatically normalized to sum to 1.0.")
-    default_weights_df = pd.DataFrame([
-        {"Criterion": item["criterion"], "Weight": item["weight"]}
-        for item in DEFAULT_CRITERIA
-    ])
-    edited_weights = st.data_editor(
-        default_weights_df,
-        column_config={
-            "Weight": st.column_config.NumberColumn(min_value=0.0, max_value=1.0, step=0.05),
-        },
-        hide_index=True,
-        use_container_width=True,
-        key="weights_editor",
-    )
-    weight_map = dict(zip(edited_weights["Criterion"], edited_weights["Weight"]))
-    normalized_weights = normalize_weights(weight_map)
-    st.json({k: round(v, 3) for k, v in normalized_weights.items()})
-
 if not candidates:
-    st.warning("Please add at least one candidate in Section 2 or 3.")
+    st.warning("Please add at least one candidate.")
 else:
     brief = build_brief(
-        product=product,
-        target_market=target_market,
-        goal=goal,
-        budget_min=budget_min,
-        budget_max=budget_max,
-        follower_range=follower_range,
-        keywords=[k.strip() for k in keywords_text.split(",") if k.strip()],
+        product=product, target_market=target_market, goal=goal,
+        budget_min=budget_min, budget_max=budget_max,
+        follower_range=follower_range, keywords=[k.strip() for k in keywords_text.split(",") if k.strip()]
     )
 
     if st.button("🎯 Run Scoring Analysis", type="primary"):
         with st.spinner("Scoring candidates..."):
-            results = source_and_score(candidates, brief, weights=normalized_weights)
-            scored_df = pd.DataFrame(results)
-            st.session_state["scored_df"] = scored_df
-        st.success(f"Successfully scored {len(scored_df)} candidate(s).")
+            results = source_and_score(candidates, brief)
+            st.session_state["scored_df"] = pd.DataFrame(results)
+        st.success("Scoring completed.")
 
     if "scored_df" in st.session_state:
+        st.dataframe(st.session_state["scored_df"], use_container_width=True)
+
+
+# ========== 4. AI Outreach Draft Generator (With Free vs Pro Limit) ==========
+st.header("5. AI Outreach Draft Generator")
+
+user_profile = get_user_profile(st.session_state["user"]["email"])
+current_tier = user_profile.get("tier", "free")
+current_usage = user_profile.get("ai_usage", 0)
+ai_limit = user_profile.get("ai_limit", 3)
+
+if current_tier == "free" and current_usage >= ai_limit:
+    st.error(f"❌ **Free Tier Limit Reached ({current_usage}/{ai_limit})**: You have used all free AI outreach generations.")
+    st.markdown("[👉 Upgrade to Pro Plan to unlock unlimited AI generations](https://your-payment-page.com)")
+else:
+    if "scored_df" in st.session_state and openai_key:
         df = st.session_state["scored_df"]
-        st.subheader("📊 Scoring Results")
-        st.dataframe(df, use_container_width=True)
+        selected_name = st.selectbox("Select Candidate for Outreach", df["name"].tolist())
 
-        col_csv, col_xlsx = st.columns(2)
-        with col_csv:
-            csv = df.to_csv(index=False).encode("utf-8-sig")
-            st.download_button(
-                "⬇️ Download CSV Report",
-                csv,
-                "scored_creators_report.csv",
-                "text/csv",
-            )
-        with col_xlsx:
-            xlsx_buf = io.BytesIO()
-            with pd.ExcelWriter(xlsx_buf, engine="openpyxl") as writer:
-                df.to_excel(writer, sheet_name="Candidates", index=False)
-            st.download_button(
-                "⬇️ Download Excel Report",
-                xlsx_buf.getvalue(),
-                "scored_creators_report.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-
-
-# ========== 5. Outreach Drafts ==========
-st.header("5. AI Outreach Draft Generator (Review Before Sending)")
-
-if "drafts_by_candidate" not in st.session_state:
-    st.session_state["drafts_by_candidate"] = {}
-
-if "scored_df" in st.session_state and openai_key:
-    df = st.session_state["scored_df"]
-    selected_name = st.selectbox("Select a Scored Candidate", df["name"].tolist())
-
-    if selected_name:
-        selected_row = df[df["name"] == selected_name].iloc[0].to_dict()
-
-        if st.button("✨ Generate 3 English Outreach Drafts (Formal / Friendly / Short)"):
-            brief_for_draft = {
-                "product": product,
-                "target_market": target_market,
-                "goal": goal,
-                "budget_text": f"{budget_min} - {budget_max} TWD/USD",
-            }
-            candidate_info = {
-                "name": selected_row.get("name", ""),
-                "platform": selected_row.get("platform", ""),
-                "followers": selected_row.get("followers", 0),
-                "content_summary": selected_row.get("content_summary", ""),
-                "estimated_price": selected_row.get("estimated_price", 0),
-            }
-
-            with st.spinner("Generating customized outreach drafts..."):
-                drafts = create_drafts(
-                    brief_for_draft,
-                    candidate_info,
-                    api_key=openai_key,
-                )
-
+        if st.button("✨ Generate AI Outreach Draft"):
+            selected_row = df[df["name"] == selected_name].iloc[0].to_dict()
+            brief_for_draft = {"product": product, "target_market": target_market, "goal": goal, "budget_text": f"{budget_min}-{budget_max}"}
+            
+            with st.spinner("Generating drafts..."):
+                drafts = create_drafts(brief_for_draft, selected_row, api_key=openai_key)
+            
             if drafts:
-                st.session_state["drafts_by_candidate"][selected_name] = drafts
+                st.success("Drafts generated successfully!")
+                # Increment usage for free tier users
+                if current_tier == "free":
+                    increment_ai_usage(user_profile["email"], current_usage)
+                
+                for d in drafts:
+                    st.markdown(f"**[{d['style'].upper()}]**")
+                    st.text_input("Subject", d["subject"], key=f"subj_{d['style']}")
+                    st.text_area("Body", d["body"], key=f"body_{d['style']}")
             else:
-                st.warning("Draft generation failed. Please check your OpenAI API Key.")
-
-    existing_drafts = st.session_state["drafts_by_candidate"].get(selected_name, [])
-    if existing_drafts:
-        for idx, d in enumerate(existing_drafts):
-            st.markdown(f"**[{d.get('style', '').upper()} VERSION]**")
-            st.text_input("Subject", d.get("subject", ""), key=f"subj_{selected_name}_{idx}")
-            st.text_area("Body", d.get("body", ""), height=180, key=f"body_{selected_name}_{idx}")
-            st.divider()
-
-        st.download_button(
-            "⬇️ Export JSON Drafts",
-            json.dumps(existing_drafts, ensure_ascii=False, indent=2),
-            f"outreach_{selected_name}.json",
-        )
-else:
-    if "scored_df" not in st.session_state:
-        st.caption("Please run scoring in Section 4 first.")
-    if not openai_key:
-        st.caption("💡 Enter your OpenAI API Key in the sidebar to generate outreach drafts.")
-
-
-# ========== 6. Compliance Checklist ==========
-st.header("6. Pre-Collaboration Compliance Checklist")
-
-checklist = [
-    "Confirmed candidate public data sources are legal and free of purchased follower lists.",
-    "Read and complied with the target social platform's Terms of Service.",
-    "Manually reviewed AI-generated outreach drafts for accuracy and transparency.",
-    "Collaboration terms (compensation, deliverables, timeline) documented in writing.",
-    "Included an opt-out mechanism allowing creators to decline further contact.",
-    "Data handling complies with GDPR and local privacy regulations.",
-]
-
-for i, item in enumerate(checklist):
-    st.checkbox(item, key=f"chk_{i}")
-
-
-# ========== 7. PDF Report ==========
-st.header("7. Export Enterprise PDF Report")
-
-if "scored_df" not in st.session_state:
-    st.caption("Run scoring first to generate the report.")
-else:
-    if st.button("📄 Generate PDF Report"):
-        with st.spinner("Building enterprise PDF report..."):
-            report_bytes = build_report(
-                brief={
-                    "Product": product,
-                    "Target Market": target_market,
-                    "Goal": goal,
-                    "Budget": f"{budget_min} - {budget_max}",
-                    "Follower Range": f"{follower_range[0]:,} - {follower_range[1]:,}",
-                    "Keywords": keywords_text,
-                },
-                scored_df=st.session_state["scored_df"],
-                drafts_by_candidate=st.session_state.get("drafts_by_candidate", {}),
-                checklist=checklist,
-            )
-        st.download_button(
-            "⬇️ Download PDF Report",
-            report_bytes,
-            "creator_sourcing_enterprise_report.pdf",
-            "application/pdf",
-        )
-
-
-# ========== Footer ==========
-st.divider()
-st.caption(
-    "⚠️ Disclaimer: This tool is for compliant public-data sourcing and draft assistance only. "
-    "No automated DMs, bulk messaging, or private data scraping are performed. Users are fully responsible for platform compliance."
-)
+                st.warning("Draft generation failed. Check API Key.")
+    else:
+        st.caption("Run scoring analysis and enter your OpenAI API key to generate drafts.")
