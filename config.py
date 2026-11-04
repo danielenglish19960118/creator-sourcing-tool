@@ -1,50 +1,60 @@
 """
-Multi-tenant and configurable scoring weights for SaaS subscription tiers.
+Pure business logic for creator sourcing. No Streamlit dependencies.
+
+Used by both app.py (Streamlit UI) and mcp_server.py (MCP endpoint for AI agents).
 """
 
-from dataclasses import dataclass, field
+from typing import Optional, List, Dict, Any
+
+from scoring import score_candidates, DEFAULT_CRITERIA
+from draft_generator import generate_outreach_drafts
 
 
-@dataclass
-class TenantConfig:
-    tier: str = "pro"  # free, pro, agency
-    max_candidates_per_run: int = 100
-    allow_pdf_export: bool = True
-    ai_drafts_quota: int = 50
+def build_brief(
+    product: str,
+    target_market: str,
+    goal: str = "",
+    budget_min: int = 0,
+    budget_max: int = 0,
+    follower_range: tuple = (1000, 1_000_000),
+    keywords: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Build a standardized campaign brief dictionary."""
+    return {
+        "product": product,
+        "target_market": target_market,
+        "goal": goal,
+        "budget_min": budget_min,
+        "budget_max": budget_max,
+        "follower_range": follower_range,
+        "keywords": keywords or [],
+    }
 
 
-@dataclass
-class ScoringConfig:
-    follower_fit: float = 0.20
-    engagement_rate: float = 0.25
-    content_fit: float = 0.25
-    audience_region: float = 0.15
-    price_vs_budget: float = 0.15
+def normalize_weights(weight_map: Dict[str, float]) -> Dict[str, float]:
+    """Normalize scoring weights to sum to 1.0; fall back to defaults if total <= 0."""
+    total = sum(weight_map.values())
+    if total <= 0:
+        return {item["criterion"]: item["weight"] for item in DEFAULT_CRITERIA}
+    return {k: v / total for k, v in weight_map.items()}
 
-    def normalized(self) -> "ScoringConfig":
-        total = (
-            self.follower_fit
-            + self.engagement_rate
-            + self.content_fit
-            + self.audience_region
-            + self.price_vs_budget
-        )
-        if total <= 0:
-            return ScoringConfig()
-        return ScoringConfig(
-            follower_fit=self.follower_fit / total,
-            engagement_rate=self.engagement_rate / total,
-            content_fit=self.content_fit / total,
-            audience_region=self.audience_region / total,
-            price_vs_budget=self.price_vs_budget / total,
-        )
 
-    def as_dict(self) -> dict:
-        n = self.normalized()
-        return {
-            "Follower Fit": n.follower_fit,
-            "Engagement Rate": n.engagement_rate,
-            "Content Fit": n.content_fit,
-            "Audience Region": n.audience_region,
-            "Price vs. Budget": n.price_vs_budget,
-        }
+def source_and_score(
+    candidates: List[Dict[str, Any]],
+    brief: Dict[str, Any],
+    weights: Optional[Dict[str, float]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Score candidates against a brief and return a JSON-serializable list of records.
+    """
+    df = score_candidates(candidates, brief, weights=weights)
+    return df.to_dict(orient="records")
+
+
+def create_drafts(
+    brief: Dict[str, Any],
+    candidate: Dict[str, Any],
+    api_key: str,
+) -> List[Dict[str, str]]:
+    """Generate customized English outreach drafts for a selected candidate."""
+    return generate_outreach_drafts(brief, candidate, api_key=api_key)
