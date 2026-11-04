@@ -1,10 +1,16 @@
 """
-Configurable scoring weights.
-
-Clients can adjust weights in the UI; the scoring engine reads from here.
+Multi-tenant and configurable scoring weights for SaaS subscription tiers.
 """
 
 from dataclasses import dataclass, field
+
+
+@dataclass
+class TenantConfig:
+    tier: str = "pro"  # free, pro, agency
+    max_candidates_per_run: int = 100
+    allow_pdf_export: bool = True
+    ai_drafts_quota: int = 50
 
 
 @dataclass
@@ -16,7 +22,6 @@ class ScoringConfig:
     price_vs_budget: float = 0.15
 
     def normalized(self) -> "ScoringConfig":
-        """Return a copy with weights normalized to sum to 1.0."""
         total = (
             self.follower_fit
             + self.engagement_rate
