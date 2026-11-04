@@ -11,6 +11,12 @@ from core_logic import build_brief, normalize_weights, source_and_score, create_
 from report_generator import build_report
 from config import TenantConfig
 
+# 導入 Supabase SDK 用於動態授權驗證
+try:
+    from supabase import create_client
+except ImportError:
+    create_client = None
+
 try:
     from social_apis import YouTubeClient
 except ImportError:
@@ -51,7 +57,7 @@ with col_tier:
     st.markdown('<br><span class="badge-tier">PRO AGENCY TIER</span>', unsafe_allow_html=True)
 
 
-# ========== Sidebar: Tenant & API settings ==========
+# ========== Sidebar: Automated Tenant & API settings ==========
 with st.sidebar:
     st.header("🏢 Tenant & API Settings")
     st.caption("Enter your subscription key and official API credentials.")
@@ -61,6 +67,25 @@ with st.sidebar:
         value=os.environ.get("SAAS_MASTER_TOKEN", "demo-pro-tenant"),
         type="password"
     )
+    
+    # 動態驗證 Supabase 資料庫中的 Token 授權
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    supabase_key = os.environ.get("SUPABASE_KEY", "")
+    
+    if tenant_key and create_client and supabase_url and supabase_key:
+        try:
+            db = create_client(supabase_url, supabase_key)
+            res = db.table("tenants").select("*").eq("api_token", tenant_key).eq("is_active", True).execute()
+            if res.data:
+                tenant_info = res.data[0]
+                st.success(f"✅ Active Tier: {tenant_info['tier'].upper()}")
+                st.caption(f"Remaining AI Quota: {tenant_info.get('ai_drafts_quota', 'Unlimited')}")
+            elif tenant_key == os.environ.get("SAAS_MASTER_TOKEN", "demo-pro-tenant"):
+                st.info("ℹ️ Master Demo Token Active")
+            else:
+                st.error("❌ Invalid or expired subscription token.")
+        except Exception as e:
+            st.warning("⚠️ Database auth offline; running standalone mode.")
     
     youtube_key = st.text_input(
         "YouTube Data API Key",
