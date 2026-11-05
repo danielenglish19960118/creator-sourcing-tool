@@ -83,7 +83,7 @@ if "user" not in st.session_state:
 
 def get_user_profile(email: str):
     """Fetch user subscription tier and usage from Supabase."""
-    if not db_client:
+    if not db_client or not email:
         return {"tier": "free", "ai_usage": 0, "ai_limit": 3}
     try:
         res = db_client.table("tenants").select("*").eq("email", email).execute()
@@ -97,33 +97,20 @@ def get_user_profile(email: str):
         return {"tier": "free", "ai_usage": 0, "ai_limit": 3}
 
 def increment_ai_usage(email: str, current_usage: int):
-    if db_client:
+    if db_client and email:
         try:
             db_client.table("tenants").update({"ai_usage": current_usage + 1}).eq("email", email).execute()
         except Exception:
             pass
 
 
-# ========== Sidebar: Authentication & Navigation ==========
+# ========== Sidebar: Navigation & API Keys ==========
 with st.sidebar:
     st.header("🔐 SaaS Portal")
     
-    if st.session_state["user"] is None:
-        st.caption("Sign in to access your dashboard.")
-        auth_email = st.text_input("Email Address")
-        auth_password = st.text_input("Password", type="password")
-        
-        if st.button("🚀 Sign In / Register", type="primary"):
-            if not auth_email or not auth_password:
-                st.warning("Please fill in all fields.")
-            else:
-                profile = get_user_profile(auth_email)
-                st.session_state["user"] = profile
-                st.success(f"Welcome, {auth_email}!")
-                st.rerun()
-    else:
+    if st.session_state["user"] is not None:
         user = st.session_state["user"]
-        email = user.get("email")
+        email = user.get("email") if isinstance(user, dict) else "unknown"
         profile = get_user_profile(email)
         tier = profile.get("tier", "free")
         usage = profile.get("ai_usage", 0)
@@ -134,7 +121,6 @@ with st.sidebar:
             st.markdown('<span class="badge-tier">PRO TIER (UNLIMITED)</span>', unsafe_allow_html=True)
         else:
             st.markdown(f'<span class="badge-free">FREE PLAN ({usage}/{limit} AI Used)</span>', unsafe_allow_html=True)
-            # 已對應真實的 PayPal 結帳連結
             st.markdown("[👉 Upgrade to Pro ($49/mo)](https://www.paypal.com/ncp/payment/HD2SXLPVVFXW8)")
         
         if st.button("🚪 Sign Out"):
@@ -180,23 +166,7 @@ if nav_page == "📖 Product Overview (Copywriting)":
 
     st.divider()
 
-    st.header("⚡ Core Enterprise Features")
-    feat_c1, feat_c2, feat_c3 = st.columns(3)
-    with feat_c1:
-        st.markdown("### 🔍 Compliant Web Scraper")
-        st.write("Safely extracts public metadata from static web pages respecting `robots.txt`.")
-    with feat_c2:
-        st.markdown("### 📊 5-Dimension Scoring")
-        st.write("Ranks creators automatically based on follower range, engagement rate, and region.")
-    with feat_c3:
-        st.markdown("### 🤖 AI Outreach Generator")
-        st.write("Generates highly personalized English outreach drafts in 3 professional tones.")
-
-    st.divider()
-
     st.header("💎 Flexible Pricing Plans & Supported Payment Channels")
-    st.caption("We support fully automated, instant tier provisioning across all major global and local payment gateways.")
-    
     pr_c1, pr_c2 = st.columns(2)
     with pr_c1:
         st.markdown("""
@@ -208,7 +178,6 @@ if nav_page == "📖 Product Overview (Copywriting)":
             <ul style="text-align: left; list-style: none; padding: 0;">
                 <li>✔️ 3 Free AI Draft Generations</li>
                 <li>✔️ Basic Public Scraping & Scoring</li>
-                <li>✔️ CSV / Excel Report Export</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -223,13 +192,7 @@ if nav_page == "📖 Product Overview (Copywriting)":
                 <li>✔️ Unlimited AI Draft Generations</li>
                 <li>✔️ Advanced Multi-Tenant Customization</li>
                 <li>✔️ Enterprise PDF Report Export</li>
-                <li>✔️ <b>Instant Automated Account Provisioning</b></li>
             </ul>
-            <hr>
-            <p style="font-size: 0.9rem; font-weight: bold; color: #333;">🌍 Supported Global Payment Channels:</p>
-            <p style="font-size: 0.85rem; color: #555;">Lemon Squeezy, Gumroad, PayPal, Stripe</p>
-            <p style="font-size: 0.9rem; font-weight: bold; color: #333;">🇹🇼 Supported Local Payment Channels (Taiwan):</p>
-            <p style="font-size: 0.85rem; color: #555;">ECPay (綠界), NewebPay (藍新), LINE Pay</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -240,10 +203,33 @@ if nav_page == "📖 Product Overview (Copywriting)":
 # PAGE 2: SAAS APP WORKSPACE (Protected by Login)
 # =========================================================================
 if st.session_state["user"] is None:
-    st.warning("🔒 **Access Restricted**: Please sign in using the sidebar portal, or switch to the **Product Overview** page to learn more.")
+    st.title("🚀 歡迎使用 SaaS 工作區")
+    st.info("請先在下方輸入您的 Email 與密碼進行登入或註冊，以解鎖完整工作區功能。")
+    
+    col_l1, col_l2 = st.columns([2, 1])
+    with col_l1:
+        with st.form("main_login_form"):
+            auth_email = st.text_input("Email Address")
+            auth_password = st.text_input("Password", type="password")
+            submit_login = st.form_submit_button("🚀 立即登入 / 註冊解鎖", type="primary")
+            
+            if submit_login:
+                if not auth_email or not auth_password:
+                    st.warning("請完整填寫 Email 與密碼。")
+                else:
+                    profile = get_user_profile(auth_email)
+                    st.session_state["user"] = profile
+                    st.success(f"歡迎回來，{auth_email}！系統已成功登入。")
+                    st.rerun()
     st.stop()
 
-user_profile = get_user_profile(st.session_state["user"]["email"])
+# 安全確保取得使用者資料
+user_data = st.session_state["user"]
+if isinstance(user_data, dict) and "email" in user_data:
+    user_profile = get_user_profile(user_data["email"])
+else:
+    user_profile = {"tier": "free", "ai_usage": 0, "ai_limit": 3}
+
 current_tier = user_profile.get("tier", "free")
 
 
