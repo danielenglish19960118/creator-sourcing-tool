@@ -134,8 +134,8 @@ with st.sidebar:
             st.markdown('<span class="badge-tier">PRO TIER (UNLIMITED)</span>', unsafe_allow_html=True)
         else:
             st.markdown(f'<span class="badge-free">FREE PLAN ({usage}/{limit} AI Used)</span>', unsafe_allow_html=True)
-            # 已將假網址替換為實際引導說明或您的 PayPal 結帳連結
-            st.markdown("[👉 Upgrade to Pro ($49/mo)](https://developer.paypal.com/)")
+            # 已對應真實的 PayPal 結帳連結
+            st.markdown("[👉 Upgrade to Pro ($49/mo)](https://www.paypal.com/ncp/payment/HD2SXLPVVFXW8)")
         
         if st.button("🚪 Sign Out"):
             st.session_state["user"] = None
@@ -396,7 +396,7 @@ ai_limit = user_profile.get("ai_limit", 3)
 
 if current_tier == "free" and current_usage >= ai_limit:
     st.error(f"❌ **Free Tier Limit Reached ({current_usage}/{ai_limit})**: You have used all free AI outreach generations.")
-    st.markdown("[👉 Upgrade to Pro Plan via PayPal / Lemon Squeezy](https://developer.paypal.com/)")
+    st.markdown("[👉 Upgrade to Pro Plan via PayPal](https://www.paypal.com/ncp/payment/HD2SXLPVVFXW8)")
 else:
     if "scored_df" in st.session_state and openai_key:
         df = st.session_state["scored_df"]
