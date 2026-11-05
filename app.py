@@ -67,6 +67,18 @@ st.markdown("""
         text-align: center;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
+    .payment-btn {
+        display: inline-block;
+        width: 100%;
+        padding: 10px 15px;
+        margin: 5px 0;
+        background-color: #0070ba;
+        color: white !important;
+        text-align: center;
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -104,7 +116,7 @@ def increment_ai_usage(email: str, current_usage: int):
             pass
 
 
-# ========== Sidebar: Navigation & API Keys ==========
+# ========== Sidebar: Navigation & Multi-Gateway Subscriptions ==========
 with st.sidebar:
     st.header("🔐 SaaS Portal")
     
@@ -121,15 +133,21 @@ with st.sidebar:
             st.markdown('<span class="badge-tier">PRO TIER (UNLIMITED)</span>', unsafe_allow_html=True)
         else:
             st.markdown(f'<span class="badge-free">FREE PLAN ({usage}/{limit} AI Used)</span>', unsafe_allow_html=True)
-            st.markdown("[👉 Upgrade to Pro ($49/mo)](https://www.paypal.com/ncp/payment/HD2SXLPVVFXW8)")
+            
+            st.markdown("---")
+            st.markdown("### 💳 Upgrade Options ($49/mo)")
+            st.markdown("[👉 Pay via PayPal](https://www.paypal.com/ncp/payment/HD2SXLPVVFXW8)")
+            st.markdown("[👉 Pay via Lemon Squeezy](https://your-lemonsqueezy-link.com)")
+            st.markdown("[👉 Pay via ECPay / LINE Pay (Taiwan)](https://your-ecpay-link.com)")
         
+        st.markdown("---")
         if st.button("🚪 Sign Out"):
             st.session_state["user"] = None
             st.rerun()
 
     st.divider()
     st.markdown("### 🧭 Navigation")
-    nav_page = st.radio("Go to", ["📖 Product Overview (Copywriting)", "⚡ SaaS App Workspace"])
+    nav_page = st.radio("Go to", ["📖 Product Overview", "⚡ SaaS App Workspace"])
 
     if st.session_state["user"]:
         st.divider()
@@ -142,7 +160,7 @@ with st.sidebar:
 # =========================================================================
 # PAGE 1: PRODUCT OVERVIEW & COPYWRITING PAGE (Landing Page)
 # =========================================================================
-if nav_page == "📖 Product Overview (Copywriting)":
+if nav_page == "📖 Product Overview":
     st.markdown('<p class="hero-title">🚀 AI-Powered Influencer Sourcing & Compliance-First SaaS Engine</p>', unsafe_allow_html=True)
     st.markdown('<p class="hero-subtitle">Instantly discover, vet, and score top-tier creators across YouTube & Instagram while strictly adhering to platform Terms of Service. Built for global marketing agencies.</p>', unsafe_allow_html=True)
     
@@ -166,7 +184,7 @@ if nav_page == "📖 Product Overview (Copywriting)":
 
     st.divider()
 
-    st.header("💎 Flexible Pricing Plans & Supported Payment Channels")
+    st.header("💎 Flexible Pricing Plans & Payment Gateways")
     pr_c1, pr_c2 = st.columns(2)
     with pr_c1:
         st.markdown("""
@@ -178,6 +196,7 @@ if nav_page == "📖 Product Overview (Copywriting)":
             <ul style="text-align: left; list-style: none; padding: 0;">
                 <li>✔️ 3 Free AI Draft Generations</li>
                 <li>✔️ Basic Public Scraping & Scoring</li>
+                <li>✔️ CSV / Excel Data Export</li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
@@ -190,9 +209,13 @@ if nav_page == "📖 Product Overview (Copywriting)":
             <hr>
             <ul style="text-align: left; list-style: none; padding: 0;">
                 <li>✔️ Unlimited AI Draft Generations</li>
-                <li>✔️ Advanced Multi-Tenant Customization</li>
+                <li>✔️ Multi-Tenant Customization</li>
                 <li>✔️ Enterprise PDF Report Export</li>
+                <li>✔️ Instant Automated Provisioning</li>
             </ul>
+            <hr>
+            <p style="font-size: 0.9rem; font-weight: bold; color: #333;">💳 Supported Checkout Gateways:</p>
+            <p style="font-size: 0.85rem; color: #555;">PayPal, Lemon Squeezy, ECPay, LINE Pay</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -203,27 +226,27 @@ if nav_page == "📖 Product Overview (Copywriting)":
 # PAGE 2: SAAS APP WORKSPACE (Protected by Login)
 # =========================================================================
 if st.session_state["user"] is None:
-    st.title("🚀 歡迎使用 SaaS 工作區")
-    st.info("請先在下方輸入您的 Email 與密碼進行登入或註冊，以解鎖完整工作區功能。")
+    st.title("🚀 Welcome to SaaS Workspace")
+    st.info("Please enter your Email and Password below to sign in or register and unlock the full workspace.")
     
     col_l1, col_l2 = st.columns([2, 1])
     with col_l1:
         with st.form("main_login_form"):
             auth_email = st.text_input("Email Address")
             auth_password = st.text_input("Password", type="password")
-            submit_login = st.form_submit_button("🚀 立即登入 / 註冊解鎖", type="primary")
+            submit_login = st.form_submit_button("🚀 Sign In / Register to Unlock", type="primary")
             
             if submit_login:
                 if not auth_email or not auth_password:
-                    st.warning("請完整填寫 Email 與密碼。")
+                    st.warning("Please fill in both Email and Password.")
                 else:
                     profile = get_user_profile(auth_email)
                     st.session_state["user"] = profile
-                    st.success(f"歡迎回來，{auth_email}！系統已成功登入。")
+                    st.success(f"Welcome back, {auth_email}! Access granted.")
                     st.rerun()
     st.stop()
 
-# 安全確保取得使用者資料
+# Safe User Profile Fetching
 user_data = st.session_state["user"]
 if isinstance(user_data, dict) and "email" in user_data:
     user_profile = get_user_profile(user_data["email"])
@@ -235,8 +258,8 @@ current_tier = user_profile.get("tier", "free")
 
 col_title, col_tier = st.columns([4, 1])
 with col_title:
-    st.title("🚀 AI-Powered Influencer Sourcing & Compliance-First SaaS Engine")
-    st.caption("Instantly discover, vet, and score top-tier creators across YouTube & Instagram while strictly adhering to platform Terms of Service. Built for global marketing agencies.")
+    st.title("🚀 AI-Powered Influencer Sourcing & Compliance Engine")
+    st.caption("Instantly discover, vet, and score top-tier creators across YouTube & Instagram while strictly adhering to platform Terms of Service.")
 with col_tier:
     if current_tier in ["pro", "agency"]:
         st.markdown('<br><span class="badge-tier">PRO AGENCY TIER</span>', unsafe_allow_html=True)
@@ -255,13 +278,13 @@ with col1:
     goal = st.text_area("Campaign Goal", value="Brand awareness, high-converting UGC content, regional market entry")
 
 with col2:
-    budget_min = st.number_input("Budget Min (TWD/USD)", min_value=0, step=1000, value=5000)
-    budget_max = st.number_input("Budget Max (TWD/USD)", min_value=0, step=1000, value=25000)
+    budget_min = st.number_input("Budget Min (USD)", min_value=0, step=1000, value=5000)
+    budget_max = st.number_input("Budget Max (USD)", min_value=0, step=1000, value=25000)
     follower_range = st.slider("Target Follower Range", min_value=1000, max_value=1_000_000, value=(5000, 150_000), step=1000)
     keywords_text = st.text_input("Content Keywords (comma-separated)", value="skincare, beauty, glowing skin, sensitive skin")
 
 
-# ========== 2. Candidate Input ==========
+# ========== 2. Candidate Data Sourcing ==========
 st.header("2. Candidate Data Sourcing")
 
 input_mode = st.radio(
@@ -316,8 +339,8 @@ elif input_mode == "Enter Candidate Manually":
         c_platform = st.selectbox("Platform", ["Instagram", "TikTok", "YouTube", "Blog", "Other"])
         c_followers = st.number_input("Followers", min_value=0, step=1000, value=25000)
         c_engagement = st.number_input("Engagement Rate", min_value=0.0, max_value=1.0, value=0.042, step=0.005)
-        c_region = st.text_input("Audience Region", value="Taiwan, SE Asia")
-        c_price = st.number_input("Estimated Price", min_value=0, step=1000, value=12000)
+        c_region = st.text_input("Audience Region", value="North America, SE Asia")
+        c_price = st.number_input("Estimated Price (USD)", min_value=0, step=1000, value=12000)
         c_keywords = st.text_input("Content Keywords", value="skincare, beauty")
         c_summary = st.text_area("Content Summary", value="Skincare routines.")
         add_manual = st.form_submit_button("➕ Add Candidate")
@@ -352,8 +375,8 @@ if candidates:
         st.rerun()
 
 
-# ========== 3. Scoring Engine ==========
-st.header("4. Weighted Scoring & Filtering Engine")
+# ========== 3. Weighted Scoring Engine ==========
+st.header("3. Weighted Scoring & Filtering Engine")
 
 if not candidates:
     st.warning("Please add at least one candidate.")
@@ -375,14 +398,23 @@ else:
 
 
 # ========== 4. AI Outreach Draft Generator ==========
-st.header("5. AI Outreach Draft Generator")
+st.header("4. AI Outreach Draft Generator")
 
 current_usage = user_profile.get("ai_usage", 0)
 ai_limit = user_profile.get("ai_limit", 3)
 
 if current_tier == "free" and current_usage >= ai_limit:
     st.error(f"❌ **Free Tier Limit Reached ({current_usage}/{ai_limit})**: You have used all free AI outreach generations.")
-    st.markdown("[👉 Upgrade to Pro Plan via PayPal](https://www.paypal.com/ncp/payment/HD2SXLPVVFXW8)")
+    
+    st.markdown("### 💳 Upgrade to Pro Plan ($49/mo) via Your Preferred Payment Method:")
+    c_pay1, c_pay2, c_pay3 = st.columns(3)
+    with c_pay1:
+        st.markdown("[👉 Pay with PayPal](https://www.paypal.com/ncp/payment/HD2SXLPVVFXW8)")
+    with c_pay2:
+        st.markdown("[👉 Pay with Lemon Squeezy](https://your-lemonsqueezy-link.com)")
+    with c_pay3:
+        st.markdown("[👉 Pay with ECPay / LINE Pay](https://your-ecpay-link.com)")
+
 else:
     if "scored_df" in st.session_state and openai_key:
         df = st.session_state["scored_df"]
@@ -405,6 +437,6 @@ else:
                     st.text_input("Subject", d["subject"], key=f"subj_{d['style']}")
                     st.text_area("Body", d["body"], key=f"body_{d['style']}")
             else:
-                st.warning("Draft generation failed. Check API Key.")
+                st.warning("Draft generation failed. Please check your OpenAI API Key.")
     else:
-        st.caption("Run scoring analysis and enter your OpenAI API key to generate drafts.")
+        st.caption("Run scoring analysis and enter your OpenAI API key to generate outreach drafts.")
