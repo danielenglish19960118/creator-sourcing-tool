@@ -67,18 +67,6 @@ st.markdown("""
         text-align: center;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
-    .payment-btn {
-        display: inline-block;
-        width: 100%;
-        padding: 10px 15px;
-        margin: 5px 0;
-        background-color: #0070ba;
-        color: white !important;
-        text-align: center;
-        text-decoration: none;
-        border-radius: 6px;
-        font-weight: bold;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -138,7 +126,7 @@ with st.sidebar:
             st.markdown("### 💳 Upgrade Options ($49/mo)")
             st.markdown("[👉 Pay via PayPal](https://www.paypal.com/ncp/payment/HD2SXLPVVFXW8)")
             st.markdown("[👉 Pay via Lemon Squeezy](https://your-lemonsqueezy-link.com)")
-            st.markdown("[👉 Pay via ECPay / LINE Pay (Taiwan)](https://your-ecpay-link.com)")
+            st.markdown("[👉 Pay via ECPay / LINE Pay](https://your-ecpay-link.com)")
         
         st.markdown("---")
         if st.button("🚪 Sign Out"):
